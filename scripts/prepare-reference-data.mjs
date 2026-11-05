@@ -1,0 +1,21 @@
+﻿import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { prepareReference } from '../reference-geometry.js';
+
+const source = process.argv[2];
+if (!source) throw new Error('Usage: node scripts/prepare-reference-data.mjs <source-folder> [output.local.json]');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const planets = JSON.parse(await fs.readFile(path.join(source, 'planets.geojson'), 'utf8'));
+const lanes = JSON.parse(await fs.readFile(path.join(source, 'hyperspace-lanes.geojson'), 'utf8'));
+const context = prepareReference(planets, lanes);
+const atlas = JSON.parse(await fs.readFile(path.join(root, 'data/star-wars-22bby.json'), 'utf8'));
+const cards = JSON.parse(await fs.readFile(path.join(root, 'data/planet-cards-30.json'), 'utf8'));
+delete atlas.schematic; delete atlas.cardsFile;
+atlas.title = 'Галактика · 30 миров';
+atlas.coordinateSpace = 'reference-cartography-pixels-top-left';
+atlas.descriptionShort = '30 карточек · 2436 фоновых миров · справочные гиперлинии';
+atlas.coordinateNote = 'Геослой подготовлен пользователем из iSkore / Henry Bernberg / CARTO. Права на его распространение не подтверждены; не входит в поставку WorldAtlas.';
+const output = path.resolve(process.argv[3] || path.join(root, 'WorldAtlas-reference.local.json'));
+await fs.writeFile(output, JSON.stringify({ ...atlas, context, places: cards.places }));
+console.log(JSON.stringify({ output, points: context.points.length, paths: context.paths.length, cards: cards.places.length }));

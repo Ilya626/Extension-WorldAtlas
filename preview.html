@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>World Atlas · 30 миров</title>
+  <link rel="stylesheet" href="./style.css">
+  <style>body{margin:0;background:#070a12;color:#f4efe7;font:15px system-ui}#preview-loading{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center}</style>
+</head>
+<body>
+  <p id="preview-loading">Открываем галактику…</p>
+  <script type="module">
+    import { AtlasView } from './viewer.js';
+    import { loadDefaultAtlas } from './atlas-data.js';
+    const base = new URL('.', location.href);
+    try {
+      const atlas = await loadDefaultAtlas(base);
+      let route = ['coruscant', 'naboo', 'tatooine', 'ryloth'];
+      const view = new AtlasView({ base, atlas, initialFocus: false, route: () => route,
+        saveRoute: async points => { route = points; }, canEdit: () => true,
+        onImport: () => {},
+      });
+      await view.open();
+      view.root.querySelector('.wa-brand .wa-eyebrow').textContent = 'WORLD ATLAS · ПРИМЕР';
+      view.closeButton.textContent = '⌖';
+      view.closeButton.setAttribute('aria-label', `Показать все ${atlas.places.length} мест`);
+      view.closeButton.title = `Показать все ${atlas.places.length} мест`;
+      view.close = () => view.fitPlaces();
+      document.getElementById('preview-loading').remove();
+    } catch (error) { document.getElementById('preview-loading').textContent = `Карта не загрузилась: ${error.message}`; }
+  </script>
+</body>
+</html>

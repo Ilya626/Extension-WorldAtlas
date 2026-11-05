@@ -1,0 +1,9 @@
+review/
+node_modules/
+*.log
+*.zip
+*.private.*
+TASKS.md
+data/star-wars-reference.json
+data/provenance/reference-summary.json
+*.local.json

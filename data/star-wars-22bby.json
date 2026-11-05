@@ -1,0 +1,34 @@
+{
+  "id": "star-wars-22bby",
+  "version": 2,
+  "title": "30 миров · каталог-схема",
+  "era": "22 ДБЯ · до Геонозиса",
+  "coordinateSpace": "original-catalog-grid-not-geography",
+  "schematic": true,
+  "width": 1600,
+  "height": 1600,
+  "background": "assets/Milky_Way_Galaxy.jpg",
+  "backgroundOpacity": 0.72,
+  "cardsFile": "data/planet-cards-30.json",
+  "defaultPlaceImage": "assets/landscape-card.svg",
+  "imageKinds": {
+    "city": "assets/Ecumenopolis.png",
+    "desert": "assets/DesertPlanet.jpg",
+    "ocean": "assets/Ocean_planet.png",
+    "green": "assets/Populated_Planet.png",
+    "forest": "assets/Populated_Planet.png",
+    "brown": "assets/Brown_Planet.png",
+    "rocky": "assets/Brown_Planet.png",
+    "yellow": "assets/Yellow_atmosphere_planet.png",
+    "ice": "assets/landscape-card.svg",
+    "volcanic": "assets/Brown_Planet.png",
+    "swamp": "assets/Populated_Planet.png"
+  },
+  "initialView": {
+    "x": 840,
+    "y": 820,
+    "fit": "cover"
+  },
+  "descriptionShort": "30 карточек на условной сетке · геослой: «Карта из источника»",
+  "coordinateNote": "Это авторская сетка каталога, не география. Справочные координаты и гиперлинии не входят в поставку: кнопка «Карта из источника» загружает их отдельно с raw.githubusercontent.com. Права исходной картографии не подтверждены; подробности в README."
+}
