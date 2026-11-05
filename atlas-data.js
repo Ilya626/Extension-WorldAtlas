@@ -37,6 +37,8 @@ export async function loadReferenceAtlas(base) {
     const atlas = await readLocalJson('data/star-wars-22bby.json', base);
     delete atlas.schematic;
     atlas.context = await downloadReference();
+    atlas.coordinateSpace = 'reference-cartography-pixels-top-left';
+    atlas.initialView.fit = 'cover';
     atlas.title = 'Галактика · 30 миров';
     atlas.descriptionShort = '30 карточек · 2436 фоновых миров · справочные гиперлинии';
     atlas.coordinateNote = 'Геослой отдельно загружен из iSkore / Henry Bernberg / CARTO. Смешанная хронология; не проверенная сеть22ДБЯ. Права на исходную картографию не подтверждены; WorldAtlas её не распространяет.';
