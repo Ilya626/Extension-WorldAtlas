@@ -107,7 +107,7 @@ test('portable route/calendar survives reload with different L0 IDs and follows 
 });
 
 test('an invalid portable file preserves state and a successful import can be undone', () => {
-    const original = { events: [{ id: 'existing' }], manual: false, calendarStart: { label: 'Своя опора' } };
+    const original = { events: [{ id: 'existing' }], manual: false, calendarStart: { label: 'Своя опора' }, previous: { manual: true, route: ['a'] } };
     const before = structuredClone(original), route = ['b'];
     assert.throws(() => readRouteSnapshot('{"format":"world-memory-support"}', atlas), /не файл маршрута/);
     assert.deepEqual(original, before);

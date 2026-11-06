@@ -97,7 +97,7 @@ export function snapshotHistory(snapshot, context, local, atlas, resolver, saved
 export function applyRouteSnapshot(state, snapshot, binding, previousRoute) {
     const { previous: _previous, ...saved } = state;
     return { ...saved, manual: false, importedSnapshot: { ...snapshot, binding },
-        previous: { ...structuredClone(saved), route: structuredClone(previousRoute) } };
+        previous: { ...structuredClone(state), route: structuredClone(previousRoute) } };
 }
 
 export function undoRouteChange(state) {
