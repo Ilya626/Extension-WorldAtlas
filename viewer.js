@@ -437,13 +437,13 @@ export class AtlasView {
     async replaceAtlas(atlas) {
         this.atlas = atlas;
         await this.prepareColors();
-        this.onImport(atlas);
         this.title.textContent = atlas.title;
         this.sourceButton.hidden = !atlas.schematic;
         this.selected = null;
         this.card.hidden = true;
         this.root.classList.remove('wa-has-card');
         this.renderMap(); this.fit(); this.contextChanged();
+        await this.onImport(atlas);
     }
     async loadReference() {
         if (this.sourceButton.disabled) return;

@@ -69,7 +69,7 @@ async function importRoute(file) {
     const imported = readRouteSnapshot(await file.text(), view.atlas);
     if (context().chatMetadata !== metadata || context().chatId !== ctx.chatId) throw new Error('Чат изменился. Выберите файл ещё раз в нужном чате.');
     const local = collectHistory(ctx, view.atlas, globalThis.WorldMemory?.archive?.snapshot?.() || null);
-    const state = tracking(), next = applyRouteSnapshot(state, imported, snapshotBinding(ctx, local), route());
+    const state = tracking(), next = applyRouteSnapshot(state, imported, snapshotBinding(ctx, local, imported.boundary), route());
     for (const key of Object.keys(state)) delete state[key];
     Object.assign(state, next);
     metadata[OWNER].routes ??= {};
@@ -214,7 +214,11 @@ async function openAtlas() {
                     route,
                     saveRoute,
                     canEdit: () => Boolean(context().chatId),
-                    onImport: atlas => { settings().atlas = atlas; context().saveSettingsDebounced(); void syncHistory(); },
+                    onImport: async atlas => {
+                        settings().atlas = atlas; context().saveSettingsDebounced();
+                        if (syncing) await syncing;
+                        await syncHistory();
+                    },
                     onHistory: openHistory,
                     onRouteImport: importRoute,
                     positionLabel,

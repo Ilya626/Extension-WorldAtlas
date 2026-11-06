@@ -79,7 +79,10 @@ export function showHistoryPanel(view, controls) {
             const baseEvents = history.importEvents.slice(0, imported.events.length);
             const mapped = new Set(baseEvents.filter(event => event.placeId).map(event => event.placeId)).size;
             const unknown = new Set(baseEvents.filter(event => !event.placeId).map(event => event.placeName)).size;
-            estimate.textContent = `Импортировано событий: ${imported.events.length}; мест на карте: ${mapped}, без точки: ${unknown}. Срез источника: ${imported.coverage.throughMessage} из ${imported.coverage.messageCount} сообщений; хвост ${imported.coverage.tailMessages} не учтён. Новые L0 после границы добавляются автоматически; их откат убирает добавления.${history.importBlocked ? ` Внимание: ${history.importBlocked}.` : ''}`;
+            const attached = history.importAttachment.mode === 'local'
+                ? ` Продолжение — после локального сообщения ${history.importAttachment.messageCount} на момент импорта; исходные сообщения не совпали.`
+                : ' Граница найдена в сообщениях открытого чата.';
+            estimate.textContent = `${imported.events.length} событий · на карте ${mapped}, без точки ${unknown}. Источник: срез ${imported.coverage.throughMessage}/${imported.coverage.messageCount}, хвост ${imported.coverage.tailMessages} не учтён.${attached}${history.importBlocked ? ` Внимание: ${history.importBlocked}.` : ''}`;
             update.textContent = 'Обновить по новым L0 · без API'; update.disabled = controls.busy();
             undo.textContent = 'Отменить импорт'; resume.textContent = 'Использовать местные L0'; resume.hidden = false;
             actions.append(undo);
@@ -90,6 +93,7 @@ export function showHistoryPanel(view, controls) {
         const u = state.usage;
         usage.textContent = u ? `Последний вызов: вход ${u.prompt_tokens ?? u.input_tokens ?? '?'}, выход ${u.completion_tokens ?? u.output_tokens ?? '?'} токенов${u.cost !== undefined ? `; стоимость провайдера ${u.cost}` : '; денежная стоимость не возвращена'}.` : 'Автоматическое чтение истории и ручная правка не вызывают модель.';
         notes.textContent = state.note || '';
+        if (history.imported) notes.textContent = 'Новые L0 после привязанной границы автоматически продолжают импортированную базу; откат убирает только дополнения. Исходные сообщения и архив не импортировались. ' + notes.textContent;
         list.replaceChildren();
         const wasCalendarSettingsOpen = Boolean(calendar.querySelector('details')?.open);
         calendar.replaceChildren();

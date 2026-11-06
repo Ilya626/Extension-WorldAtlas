@@ -48,9 +48,20 @@ export function readRouteSnapshot(value, atlas) {
         calendar: { rows, now: clock(input.calendar.now) } };
 }
 
-export function snapshotBinding(context, history) {
+function locate(hashes, values) {
+    if (!values.length) return [];
+    const matches = [];
+    for (let end = values.length - 1; end < hashes.length; end++)
+        if (values.every((value, i) => hashes[end - values.length + 1 + i] === value)) matches.push(end);
+    return matches;
+}
+export function snapshotBinding(context, history, sourceBoundary = []) {
+    const hashes = (context.chat || []).map(messageRevision);
+    const matched = locate(hashes, sourceBoundary).length === 1;
     return { chat: revision(JSON.stringify((context.chat || []).map(message => [Boolean(message.is_user), Boolean(message.is_system), message.mes]))),
-        history: revision(JSON.stringify(history.evidence.map(source => [source.id, source.revision, source.through]))) };
+        history: revision(JSON.stringify(history.evidence.map(source => [source.id, source.revision, source.through]))),
+        attachment: { mode: matched ? 'source' : 'local', hashes: matched ? sourceBoundary : hashes.slice(-3),
+            empty: !hashes.length, messageCount: hashes.length } };
 }
 
 export const messageRevision = message => revision(`${Boolean(message.is_user)}:${String(message.mes || '').replace(/\r\n/g, '\n').trim()}`);
@@ -60,10 +71,9 @@ export function resolveImportedPlaces(events, atlas) {
 
 export function snapshotHistory(snapshot, context, local, atlas, resolver, savedEvents = []) {
     const changed = JSON.stringify(snapshot.binding) !== JSON.stringify(snapshotBinding(context, local));
-    const hashes = (context.chat || []).map(messageRevision), matches = [];
-    for (let end = snapshot.boundary.length - 1; snapshot.boundary.length && end < hashes.length; end++)
-        if (snapshot.boundary.every((value, i) => hashes[end - snapshot.boundary.length + 1 + i] === value)) matches.push(end);
-    const boundary = matches.length === 1 ? matches[0] : null;
+    const attachment = snapshot.binding.attachment || { mode: 'source', hashes: snapshot.boundary };
+    const matches = locate((context.chat || []).map(messageRevision), attachment.hashes);
+    const boundary = attachment.empty ? -1 : matches.length === 1 ? matches[0] : null;
     const fresh = boundary === null ? [] : local.evidence.filter(source => source.index > boundary);
     const oldEvents = resolveImportedPlaces(snapshot.events, atlas);
     const extraEvents = liveEvents(savedEvents, { evidence: fresh }, atlas);
@@ -88,7 +98,8 @@ export function snapshotHistory(snapshot, context, local, atlas, resolver, saved
         } else blocked = 'места новых L0 добавлены; расчёт новой даты недоступен, показана дата импортированного среза';
     }
     return { ...local, sources: [], evidence: [], calendar, imported: true, importChanged: changed, importBlocked: blocked,
-        importExtended: fresh.length, importBoundaryMissing: boundary === null, importEvents: [...oldEvents, ...extraEvents],
+        importExtended: fresh.length, importBoundaryMissing: boundary === null, importAttachment: attachment,
+        importEvents: [...oldEvents, ...extraEvents],
         coverage: snapshot.coverage, through: snapshot.coverage.throughMessage - 1,
         localThrough: fresh.length ? Math.max(...fresh.map(source => source.through)) : null,
         tailMessages: fresh.length ? local.tailMessages : snapshot.coverage.tailMessages, signature: 'portable-import' };

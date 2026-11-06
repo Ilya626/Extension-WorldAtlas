@@ -88,7 +88,7 @@ test('portable route/calendar survives reload with different L0 IDs and follows 
     const context = { chat: [{ is_user: false, mes: 'Ты прибыл на Альфу.' }, { is_user: false, mes: 'Ты прибыл на Бету.' }] };
     const originalLocal = history([]);
     const pack = readRouteSnapshot(portableInput(), atlas);
-    const saved = applyRouteSnapshot({ events: [], manual: false }, pack, snapshotBinding(context, originalLocal), []);
+    const saved = applyRouteSnapshot({ events: [], manual: false }, pack, snapshotBinding(context, originalLocal, pack.boundary), []);
     const restored = JSON.parse(JSON.stringify(saved));
     const oldPacket = { ...turn('99', 'Ты прибыл на Альфу.', 'Альфа'), order: 0 };
     const local = history([oldPacket]);
