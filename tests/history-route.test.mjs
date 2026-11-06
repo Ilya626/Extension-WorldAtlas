@@ -8,6 +8,8 @@ import { resolveCalendar, formatCalendar } from '../../Extension-WorldMemory/tim
 import { readRouteSnapshot, snapshotBinding, snapshotHistory, applyRouteSnapshot, undoRouteChange, messageRevision } from '../route-import.js';
 import { calendarSelection } from '../calendar-view.js';
 import { withGamePlaces } from '../game-places.js';
+import { AtlasView } from '../viewer.js';
+import { createRouteNetwork } from '../route-network.js';
 
 const atlas = { id: 'example', places: [{ id: 'a', name: 'Альфа', aliases: ['Alpha'] }, { id: 'b', name: 'Бета', aliases: ['Beta'] }] };
 const history = packets => collectHistory({ name1: 'Player' }, atlas, { packets });
@@ -19,6 +21,36 @@ const portableInput = () => ({ format: 'world-atlas-route', version: 1, atlasId:
 const turn = (id, text, place) => ({ id, text, textRevision: hash(text), order: Number(id), orderKnown: true, sourceMessageIds: [id],
     timeline: place === undefined ? null : { textRevision: hash(text), date: unknown,
         locations: place ? [{ place, status: 'arrived', date: unknown, quote: text, sourceIds: [id] }] : [] } });
+
+test('a game-world leg retains network history and only its landmark approach is dashed', () => {
+    const places = [{ id: 'a', x: 0, y: 0 }, { id: 'b', x: 10, y: 0 }, { id: 'c', x: 20, y: 0 },
+        { id: 'game:gamma', x: 33, y: 3, gamePlace: true, gameAnchor: { x: 30, y: 0, name: 'Landmark' } }];
+    const layers = [];
+    const layer = (points, options) => ({ points, options, addTo() { layers.push(this); return this; } });
+    const view = Object.assign(Object.create(AtlasView.prototype), {
+        atlas: { height: 100, places }, editing: true,
+        displayPoints: () => places,
+        routeLayer: { clearLayers() { layers.length = 0; } },
+        L: { polyline: layer, circleMarker: layer },
+        network: createRouteNetwork([{ name: 'Existing line', points: [[0, 0], [10, 0], [20, 0], [30, 0]] }],
+            places.map(place => place.gameAnchor ? { ...place, ...place.gameAnchor } : place)),
+    });
+    view.drawRoute();
+    const history = layers.filter(layer => layer.options.className === 'wa-route-history');
+    const estimated = layers.filter(layer => layer.options.className === 'wa-route-estimated');
+    assert.equal(history.length, 3);
+    assert.deepEqual(history[0].points[0][0], [100, 0]);
+    assert.deepEqual(history[0].points.at(-1).at(-1), [100, 10]);
+    assert.deepEqual(history.at(-1).points[0][0], [100, 20]);
+    assert.deepEqual(history.at(-1).points.at(-1).at(-1), [100, 30]);
+    assert.equal(history[0].options.color, '#882b31');
+    assert.equal(history.at(-1).options.color, '#ef5b5b');
+    assert.ok(history.every(layer => !layer.options.dashArray));
+    assert.equal(estimated.length, 1);
+    assert.deepEqual(estimated[0].points, [[100, 30], [97, 33]]);
+    assert.equal(estimated[0].options.dashArray, '5 8');
+    assert.deepEqual(view.routeGaps, []);
+});
 
 test('a planned trip does not change player position', () => {
     const input = history([turn('1', 'Ты прибыл на Альфу.', 'Альфа'), turn('2', 'Ты собираешься прибыть на Бету. «Ты прибыл на Бету», — мечтаешь ты.', null)]);

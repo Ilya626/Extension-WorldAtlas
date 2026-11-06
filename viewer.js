@@ -279,7 +279,11 @@ export class AtlasView {
         this.map.setMaxBounds([[-this.atlas.height * .3, -this.atlas.width * .3], [this.atlas.height * 1.3, this.atlas.width * 1.3]]);
         if (this.atlas.background) L.imageOverlay(assetUrl(this.atlas.background, this.base), bounds, { interactive: false, opacity: this.atlas.backgroundOpacity ?? 1 }).addTo(this.map);
         this.renderReference();
-        this.network = this.atlas.context?.paths?.length ? createRouteNetwork(this.atlas.context.paths, this.atlas.places.filter(place => !place.gamePlace)) : null;
+        // Game worlds join the source network at their known landmark, never at
+        // the deliberately offset pin used to show their approximate location.
+        const networkStops = this.atlas.places.filter(place => !place.gamePlace || place.gameAnchor)
+            .map(place => place.gameAnchor ? { ...place, ...place.gameAnchor } : place);
+        this.network = this.atlas.context?.paths?.length ? createRouteNetwork(this.atlas.context.paths, networkStops) : null;
         this.routeLayer = L.layerGroup().addTo(this.map);
         this.markers.clear();
         this.gamePlacesBar.replaceChildren();
@@ -467,10 +471,9 @@ export class AtlasView {
         for (let i = 1; i < points.length; i++) {
             if (!points[i - 1].id || !points[i].id || !Number.isFinite(points[i - 1].x) || !Number.isFinite(points[i].x)) { this.unmappedRouteStops = true; continue; }
             const age = points.length === 2 ? 1 : (i - 1) / (points.length - 2);
-            if (points[i - 1].gamePlace || points[i].gamePlace) {
+            for (const point of [points[i - 1], points[i]]) if (point.gameAnchor) {
                 this.estimatedRoute = true;
-                this.L.polyline([this.coords(points[i - 1]), this.coords(points[i])], { color: historyRed(age), weight: 2, opacity: .8, dashArray: '5 8', interactive: false, className: 'wa-route-estimated' }).addTo(this.routeLayer);
-                continue;
+                this.L.polyline([this.coords(point.gameAnchor), this.coords(point)], { color: historyRed(age), weight: 2, opacity: .8, dashArray: '5 8', interactive: false, className: 'wa-route-estimated' }).addTo(this.routeLayer);
             }
             const resolved = this.network?.resolve(points[i - 1].id, points[i].id);
             if (!resolved || resolved.gap) {
@@ -494,7 +497,7 @@ export class AtlasView {
             const gap = this.routeGaps[0];
             return `${position}Разрыв: ${gap.from.name} → ${gap.to.name} · в исходном слое нет соединения${this.routeGaps.length > 1 ? ` · ещё ${this.routeGaps.length - 1}` : ''}`;
         }
-        return position ? `${position}${this.unmappedRouteStops ? 'часть пути вне карты' : `${this.route().length} отмеченных остановок`}${this.estimatedRoute ? ' · пунктир — схема поездки, не точный гипермаршрут' : ''}` : this.atlas.descriptionShort || 'Коснитесь планеты';
+        return position ? `${position}${this.unmappedRouteStops ? 'часть пути вне карты' : `${this.route().length} отмеченных остановок`}${this.estimatedRoute ? ' · пунктир — условный подъезд от ориентира' : ''}` : this.atlas.descriptionShort || 'Коснитесь планеты';
     }
     async importFile() {
         const file = this.fileInput.files?.[0];
