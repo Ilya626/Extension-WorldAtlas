@@ -1,0 +1,22 @@
+.wa-travel-backdrop{position:absolute;inset:0;z-index:1249;background:#03060b88;backdrop-filter:blur(2px);pointer-events:auto}
+.wa-travel-panel{position:absolute;z-index:1250;bottom:0;left:0;right:0;max-height:90dvh;max-width:520px;margin:0 auto;background:#121822;border:1px solid #d7e3f230;border-bottom:0;border-radius:22px 22px 0 0;pointer-events:auto;display:flex;flex-direction:column;box-shadow:0 -18px 80px #0008;color:var(--wa-text);font:14px/1.45 system-ui}
+.wa-travel-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 16px 10px}
+.wa-travel-heading h2{font:550 22px/1.2 system-ui;margin:4px 0;color:inherit;text-shadow:none}
+.wa-travel-body{overflow:auto;overscroll-behavior:contain;padding:0 16px calc(18px + env(safe-area-inset-bottom));min-height:0}
+.wa-travel-hint{font-size:12px;color:var(--wa-muted);line-height:1.45;margin:7px 0;display:block}
+.wa-travel-endpoint{display:grid;grid-template-columns:1fr 1fr;gap:0 9px;border-bottom:1px solid #ffffff12;padding:9px 0}
+.wa-travel-endpoint small{grid-column:1/-1}
+.wa-travel-field{display:flex;flex-direction:column;gap:5px;font-size:12px;min-width:0;margin:7px 0;color:var(--wa-muted)}
+.wa-travel-panel select,.wa-travel-panel input,.wa-travel-phrase{width:100%;max-width:100%;min-width:0;min-height:44px;box-sizing:border-box;border:1px solid #d7e3f230;border-radius:10px;padding:8px;background:#0b111b;color:var(--wa-text);font:14px/1.35 system-ui}
+.wa-travel-panel option{background:#121822;color:#f4efe7}
+.wa-travel-departure{display:grid;grid-template-columns:1fr 1fr;gap:10px;border:1px solid #ffffff18;border-radius:12px;padding:5px 10px;margin:14px 0}
+.wa-travel-departure legend{font-size:12px;color:var(--wa-muted);padding:0 5px}
+.wa-travel-result{background:#ef5b5b09;border:1px solid #ef5b5b25;border-radius:13px;padding:12px;margin:13px 0}
+.wa-travel-result h3{font-size:23px;font-weight:550;margin:0 0 5px;color:#f6aaaa;text-shadow:none}
+.wa-travel-formula{font-size:12px;overflow-wrap:anywhere;margin:5px 0}
+.wa-travel-arrival{font-size:14px;margin:10px 0;overflow-wrap:anywhere}
+.wa-travel-phrase{resize:vertical;font-size:12px;margin:0 0 10px;min-height:96px}
+.wa-travel-source{display:block;color:#a9bacb;font-size:12px;margin:14px 0 0}
+.wa-travel-details{padding:10px 0;font-size:12px;color:var(--wa-muted)}
+.wa-travel-details summary{cursor:pointer;min-height:32px}
+.wa-travel-button{font-size:13px}

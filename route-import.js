@@ -29,6 +29,12 @@ export function readRouteSnapshot(value, atlas) {
             incomplete: Boolean(value.incomplete), approximate: Boolean(value.approximate), hourKnown: value.hourKnown !== false, period: value.period || null };
     };
     const gamePlaces = readGamePlaces(input.gamePlaces);
+    let travelDefaults;
+    if (input.travelDefaults !== undefined) {
+        const hyperdriveClass = input.travelDefaults?.hyperdriveClass;
+        if (!Number.isFinite(hyperdriveClass) || hyperdriveClass <= 0) throw new Error('Некорректный класс гипердвигателя в файле маршрута.');
+        travelDefaults = { hyperdriveClass };
+    }
     atlas = withGamePlaces(atlas, gamePlaces);
     const events = input.events.map((event, index) => {
         if (!text(event.placeName, 300).trim() || !['arrived', 'departed'].includes(event.status))
@@ -53,6 +59,7 @@ export function readRouteSnapshot(value, atlas) {
     if (input.boundary?.length > 5) throw new Error('В файле слишком много опорных сообщений. Прежний маршрут сохранён.');
     const boundary = Array.isArray(input.boundary) ? input.boundary.map(value => text(value, 100)) : [];
     return { format: input.format, version: 1, atlasId: atlas.id, calendarStart, boundary, ...(gamePlaces.length ? { gamePlaces } : {}),
+        ...(travelDefaults ? { travelDefaults } : {}),
         coverage: { throughMessage: coverage.throughMessage, messageCount: coverage.messageCount,
             tailMessages: coverage.messageCount - coverage.throughMessage }, events,
         calendar: { rows, now: clock(input.calendar.now) } };

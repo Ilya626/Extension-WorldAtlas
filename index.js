@@ -1,6 +1,6 @@
 import { AtlasView } from './viewer.js';
 import { loadAtlas, loadDefaultAtlas } from './atlas-data.js';
-import { collectHistory, liveEvents, eventRoute, requestRoute, calendarRows, findPlace } from './history-route.js';
+import { collectHistory, liveEvents, eventRoute, requestRoute, calendarRows, calendarNow, findPlace } from './history-route.js';
 import { showHistoryPanel } from './history-panel.js';
 import { showCalendar } from './calendar-view.js';
 import { readRouteSnapshot, snapshotBinding, snapshotHistory, applyRouteSnapshot, undoRouteChange } from './route-import.js';
@@ -14,9 +14,13 @@ let syncing;
 let modelBusy = false;
 let requestController;
 let calendarResolver;
+let calendarFormatter;
 async function prepareImportedCalendar() {
     if (!globalThis.WorldMemory || calendarResolver) return;
-    try { calendarResolver = (await import('/scripts/extensions/third-party/Extension-WorldMemory/timeline-calendar.js')).resolveCalendar; }
+    try {
+        const module = await import('/scripts/extensions/third-party/Extension-WorldMemory/timeline-calendar.js');
+        calendarResolver = module.resolveCalendar; calendarFormatter = module.formatCalendar;
+    }
     catch (error) { console.warn('[World Atlas] Не удалось прочитать календарный модуль WorldMemory:', error.message); }
 }
 
@@ -174,6 +178,7 @@ async function updateHistory() {
     } finally { modelBusy = false; requestController = null; void syncHistory().catch(error => console.warn('[World Atlas]', error.message)); }
 }
 function openHistory() {
+    view.root.querySelector('.wa-travel-panel')?.close?.();
     view.root.querySelector('.wa-calendar-panel')?.close?.();
     if (!context().chatId) { toastr.info('Откройте чат для маршрута игрока.', 'World Atlas'); return; }
     showHistoryPanel(view, { settings, history, state: tracking, connection, route,
@@ -207,6 +212,7 @@ function openHistory() {
     });
 }
 function openCalendar() {
+    view.root.querySelector('.wa-travel-panel')?.close?.();
     view.root.querySelector('.wa-history-panel')?.remove();
     view.importPanel?.remove();
     const anchor = () => tracking().importedSnapshot?.calendarStart || tracking().calendarStart || {};
@@ -259,6 +265,11 @@ async function openAtlas() {
                     positionLabel,
                     displayPoints,
                     currentPlaceId,
+                    travelClock: () => {
+                        const anchor = tracking().importedSnapshot?.calendarStart || tracking().calendarStart || {};
+                        return { now: calendarNow(history(), anchor), anchor, format: calendarFormatter,
+                            defaults: tracking().importedSnapshot?.travelDefaults };
+                    },
                 });
             }
             await view.open();
@@ -292,7 +303,7 @@ jQuery(async () => {
     document.querySelector('#extensionsMenu')?.append(importButton);
     const panel = document.createElement('div');
     panel.className = 'world-atlas-settings';
-    panel.innerHTML = '<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>World Atlas · 0.4.5</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content"><p>30 карточек доступны сразу. Координаты и гиперлинии — «Карта из источника». Для короткого файла маршрута откройте нужный чат и нажмите кнопку ниже: можно выбрать любой файл или вставить JSON текстом. Календарь открывается прямо из строки поиска карты.</p><button type="button" class="menu_button">Открыть атлас</button><button type="button" class="menu_button world-atlas-import">Импорт маршрута и календаря · файл / JSON</button></div></div>';
+    panel.innerHTML = '<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>World Atlas · 0.4.6</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content"><p>30 карточек доступны сразу. Координаты и гиперлинии — «Карта из источника». Для короткого файла маршрута откройте нужный чат и нажмите кнопку ниже: можно выбрать любой файл или вставить JSON текстом. Календарь открывается прямо из строки поиска карты.</p><button type="button" class="menu_button">Открыть атлас</button><button type="button" class="menu_button world-atlas-import">Импорт маршрута и календаря · файл / JSON</button></div></div>';
     panel.querySelector('button').addEventListener('click', openAtlas);
     panel.querySelector('.world-atlas-import').addEventListener('click', openRouteImport);
     document.querySelector('#extensions_settings')?.append(panel);

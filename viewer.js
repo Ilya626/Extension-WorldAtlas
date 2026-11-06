@@ -1,6 +1,7 @@
 import { loadAtlas, loadReferenceAtlas } from './atlas-data.js';
 import { createRouteNetwork, historyRed } from './route-network.js';
 import { withGamePlaces } from './game-places.js';
+import { showTravel } from './travel-view.js';
 
 let leafletReady;
 function loadLeaflet(base) {
@@ -110,6 +111,7 @@ export class AtlasView {
     }
     close() {
         if (this.root.hidden) return;
+        this.root.querySelector('.wa-travel-panel')?.close?.();
         this.editing = false;
         this.root.hidden = true;
         document.body.style.overflow = this.previousOverflow;
@@ -173,6 +175,8 @@ export class AtlasView {
         this.clearButton = this.button('Очистить линию', 'Очистить', () => this.updateRoute([]), 'wa-text-button');
         this.importButton = this.button('Импортировать atlas JSON: заменить карту', 'Карта JSON', () => this.fileInput.click(), 'wa-text-button');
         this.toolbar.append(this.editButton, this.undoButton, this.clearButton, this.importButton);
+        this.travelButton = this.button('Оценить время перелёта', 'Оценить перелёт', () => showTravel(this, this.atlas.places.find(place => place.id === this.selected)), 'wa-travel-button');
+        this.toolbar.prepend(this.travelButton);
         if (this.onRouteImport) {
             this.routeFileInput = el('input', 'wa-route-file-input'); this.routeFileInput.type = 'file';
             this.routeFileInput.setAttribute('aria-label', 'Выбрать файл маршрута любого типа');
@@ -213,6 +217,7 @@ export class AtlasView {
     }
     showRouteImport() {
         if (!this.onRouteImport) return;
+        this.root.querySelector('.wa-travel-panel')?.close?.();
         this.root.querySelector('.wa-history-panel')?.remove();
         this.root.querySelector('.wa-calendar-panel')?.close?.();
         this.importPanel?.remove();
@@ -395,6 +400,7 @@ export class AtlasView {
             details.addEventListener('toggle', () => this.keepSelectedVisible());
             body.append(details);
         }
+        body.append(this.button('Оценить перелёт к выбранному миру', 'Перелёт сюда', () => showTravel(this, place), 'wa-travel-button'));
         if (this.editing) body.append(this.button('Добавить выбранную планету в линию', '+ В линию пути', () => this.addSelected(), 'wa-add-point'));
         const links = el('div', 'wa-sources');
         for (const source of place.sourceUrls ?? []) {
@@ -433,6 +439,7 @@ export class AtlasView {
     }
     contextChanged() {
         if (!this.root) return;
+        this.root.querySelector('.wa-travel-panel')?.close?.();
         this.editing = false;
         this.renderEdit();
         this.card.querySelector('.wa-add-point')?.remove();
