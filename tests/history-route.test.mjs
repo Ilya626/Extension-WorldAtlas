@@ -4,10 +4,16 @@ import { collectHistory, liveEvents, eventRoute, requestRoute, calendarRows } fr
 import { hash } from '../../Extension-WorldMemory/history.js';
 import { createArchive, readArchive } from '../../Extension-WorldMemory/archive-store.js';
 import { installArchiveRuntime } from '../../Extension-WorldMemory/archive-runtime.js';
+import { resolveCalendar } from '../../Extension-WorldMemory/timeline-calendar.js';
+import { readRouteSnapshot, snapshotBinding, snapshotHistory, applyRouteSnapshot, undoRouteChange, messageRevision } from '../route-import.js';
 
 const atlas = { id: 'example', places: [{ id: 'a', name: 'Альфа', aliases: ['Alpha'] }, { id: 'b', name: 'Бета', aliases: ['Beta'] }] };
 const history = packets => collectHistory({ name1: 'Player' }, atlas, { packets });
 const unknown = { text: null, precision: 'unknown' };
+const portableInput = () => ({ format: 'world-atlas-route', version: 1, atlasId: atlas.id,
+    coverage: { throughMessage: 1, messageCount: 2 }, boundary: [messageRevision({ is_user: false, mes: 'Ты прибыл на Альфу.' })],
+    events: [{ placeId: 'a', placeName: 'Альфа', status: 'arrived', source: 'Переносимый L0', offset: 0 }],
+    calendar: { now: { label: 'День 2', elapsedHours: 24 }, rows: [{ place: 'Альфа', source: 'Переносимый L0', offset: 0, clock: { label: 'День 2' } }] } });
 const turn = (id, text, place) => ({ id, text, textRevision: hash(text), order: Number(id), orderKnown: true, sourceMessageIds: [id],
     timeline: place === undefined ? null : { textRevision: hash(text), date: unknown,
         locations: place ? [{ place, status: 'arrived', date: unknown, quote: text, sourceIds: [id] }] : [] } });
@@ -76,4 +82,39 @@ test('one L0 response saves exact and approximate dates used by map and calendar
         .map(row => ({ day: row.clock.gameDay, offset: row.clock.anchorDay, approximate: row.clock.approximate })),
     [{ day: 1, offset: -60, approximate: true }, { day: 3, offset: -58, approximate: true }]);
     assert.equal(input.sources.length, 0); assert.equal(calls.length, beforeViews);
+});
+
+test('portable route/calendar survives reload with different L0 IDs and follows only new sources', () => {
+    const context = { chat: [{ is_user: false, mes: 'Ты прибыл на Альфу.' }, { is_user: false, mes: 'Ты прибыл на Бету.' }] };
+    const originalLocal = history([]);
+    const pack = readRouteSnapshot(portableInput(), atlas);
+    const saved = applyRouteSnapshot({ events: [], manual: false }, pack, snapshotBinding(context, originalLocal), []);
+    const restored = JSON.parse(JSON.stringify(saved));
+    const oldPacket = { ...turn('99', 'Ты прибыл на Альфу.', 'Альфа'), order: 0 };
+    const local = history([oldPacket]);
+    const first = snapshotHistory(restored.importedSnapshot, context, local, atlas, resolveCalendar);
+    assert.equal(first.importEvents.length, 1);
+    assert.deepEqual(first.calendar.rows, pack.calendar.rows);
+    const next = { ...turn('100', 'Ты прибыл на Бету.', 'Бета'), order: 1 };
+    next.timeline.elapsedHours = 24; next.timeline.timePrecision = 'exact'; next.timeline.locations[0].offsetHours = 24;
+    const advanced = snapshotHistory(restored.importedSnapshot, context, history([oldPacket, next]), atlas, resolveCalendar);
+    assert.deepEqual(eventRoute(advanced.importEvents), ['a', 'b']);
+    assert.equal(advanced.calendar.now.elapsedHours, 48);
+    assert.equal(advanced.calendar.rows.length, 2);
+    const rolledBack = snapshotHistory(restored.importedSnapshot, context, local, atlas, resolveCalendar);
+    assert.equal(rolledBack.calendar.now.elapsedHours, 24);
+    assert.deepEqual(eventRoute(rolledBack.importEvents), ['a']);
+});
+
+test('an invalid portable file preserves state and a successful import can be undone', () => {
+    const original = { events: [{ id: 'existing' }], manual: false, calendarStart: { label: 'Своя опора' } };
+    const before = structuredClone(original), route = ['b'];
+    assert.throws(() => readRouteSnapshot('{"format":"world-memory-support"}', atlas), /не файл маршрута/);
+    assert.deepEqual(original, before);
+    const overlong = portableInput(); overlong.calendar.now.label = 'x'.repeat(2001);
+    assert.throws(() => readRouteSnapshot(overlong, atlas), /не обрезались/);
+    const imported = applyRouteSnapshot(original, readRouteSnapshot(portableInput(), atlas), {}, route);
+    const undone = undoRouteChange(imported);
+    assert.deepEqual(undone.state, before);
+    assert.deepEqual(undone.route, route);
 });

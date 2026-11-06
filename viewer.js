@@ -166,6 +166,18 @@ export class AtlasView {
         this.clearButton = this.button('Очистить линию', 'Очистить', () => this.updateRoute([]), 'wa-text-button');
         this.importButton = this.button('Импортировать atlas JSON', '⋯', () => this.fileInput.click());
         this.toolbar.append(this.editButton, this.undoButton, this.clearButton, this.importButton);
+        if (this.onRouteImport) {
+            this.routeFileInput = el('input'); this.routeFileInput.type = 'file'; this.routeFileInput.hidden = true;
+            // No accept/capture filter: Android must show Telegram/Downloads files.
+            this.routeFileInput.addEventListener('change', async () => {
+                const file = this.routeFileInput.files?.[0]; this.routeFileInput.value = '';
+                if (!file) return;
+                try { await this.onRouteImport(file); }
+                catch (error) { this.message.textContent = `Импорт маршрута: ${error.message}`; }
+            });
+            this.routeImportButton = this.button('Импорт маршрута и календаря в открытый чат', 'Импорт маршрута и календаря', () => this.routeFileInput.click(), 'wa-text-button');
+            this.toolbar.append(this.routeImportButton);
+        }
         this.sourceButton = this.button('Отдельно загрузить справочный геослой iSkore / CARTO с raw.githubusercontent.com; права картографии не подтверждены', 'Карта из источника', () => this.loadReference(), 'wa-text-button');
         this.sourceButton.hidden = !this.atlas.schematic;
         this.toolbar.append(this.sourceButton);
@@ -182,6 +194,7 @@ export class AtlasView {
         this.fileInput.accept = 'application/json,.json';
         this.fileInput.addEventListener('change', () => this.importFile());
         this.root.append(this.mapNode, header, this.tools, this.bottom, this.fileInput);
+        if (this.routeFileInput) this.root.append(this.routeFileInput);
         this.root.addEventListener('keydown', event => {
             if (event.key === 'Escape') this.close();
             if (event.key === 'Tab') {

@@ -63,7 +63,8 @@ export function showHistoryPanel(view, controls) {
     selectTab(false);
     function render() {
         const state = controls.state(), history = controls.history(), effective = controls.connection();
-        status.textContent = `${controls.position()} · ${state.manual ? 'ручной маршрут, автоматическое добавление приостановлено' : `хвост: ${history.tailMessages} сообщений, ещё не учтён`}`;
+        status.textContent = `${controls.position()} · ${history.imported ? history.importBlocked ? 'срез требует внимания' : history.importExtended ? `хвост: ${history.tailMessages}, ещё не учтён` : 'исторический срез, новые L0 добавятся автоматически'
+            : state.manual ? 'ручной маршрут, автоматическое добавление приостановлено' : `хвост: ${history.tailMessages} сообщений, ещё не учтён`}`;
         own.hidden = reuse.checked;
         inherited.hidden = !reuse.checked;
         inherited.textContent = effective.url && effective.model ? `WorldMemory · ${effective.model}. Его настройки не меняются.` : 'Нужен OpenAI-compatible URL и модель в WorldMemory; или снимите флажок и укажите свои здесь.';
@@ -73,6 +74,19 @@ export function showHistoryPanel(view, controls) {
             : `${history.sources.length} источников · ${chars.toLocaleString('ru')} символов + инструкция/список миров. Один запрос, ответ до 8192 токенов. Денежная цена зависит от провайдера; тариф атласу неизвестен.`;
         update.textContent = unchanged ? 'Обновить маршрут · без API' : 'Обновить маршрут · 1 вызов';
         update.disabled = controls.busy() || !history.evidence.length; undo.disabled = !state.previous; resume.hidden = !state.manual;
+        if (history.imported) {
+            const imported = state.importedSnapshot;
+            const baseEvents = history.importEvents.slice(0, imported.events.length);
+            const mapped = new Set(baseEvents.filter(event => event.placeId).map(event => event.placeId)).size;
+            const unknown = new Set(baseEvents.filter(event => !event.placeId).map(event => event.placeName)).size;
+            estimate.textContent = `Импортировано событий: ${imported.events.length}; мест на карте: ${mapped}, без точки: ${unknown}. Срез источника: ${imported.coverage.throughMessage} из ${imported.coverage.messageCount} сообщений; хвост ${imported.coverage.tailMessages} не учтён. Новые L0 после границы добавляются автоматически; их откат убирает добавления.${history.importBlocked ? ` Внимание: ${history.importBlocked}.` : ''}`;
+            update.textContent = 'Обновить по новым L0 · без API'; update.disabled = controls.busy();
+            undo.textContent = 'Отменить импорт'; resume.textContent = 'Использовать местные L0'; resume.hidden = false;
+            actions.append(undo);
+        } else {
+            undo.textContent = 'Отменить обновление'; resume.textContent = 'Использовать историю'; secondaryActions.prepend(undo);
+        }
+        auto.disabled = Boolean(history.imported); if (history.imported) auto.checked = true;
         const u = state.usage;
         usage.textContent = u ? `Последний вызов: вход ${u.prompt_tokens ?? u.input_tokens ?? '?'}, выход ${u.completion_tokens ?? u.output_tokens ?? '?'} токенов${u.cost !== undefined ? `; стоимость провайдера ${u.cost}` : '; денежная стоимость не возвращена'}.` : 'Автоматическое чтение истории и ручная правка не вызывают модель.';
         notes.textContent = state.note || '';
@@ -83,7 +97,7 @@ export function showHistoryPanel(view, controls) {
         for (const title of ['Игровая дата', 'Место']) head.append(el('th', title));
         table.append(head);
         const events = controls.events();
-        const start = state.calendarStart || {};
+        const start = state.importedSnapshot?.calendarStart || state.calendarStart || {};
         const datedRows = calendarRows(history, events, start);
         for (const event of events) {
             const item = el('li'); const title = event.placeName || event.placeId;
@@ -117,6 +131,10 @@ export function showHistoryPanel(view, controls) {
             input.addEventListener('change', async () => { await controls.setCalendar({ [key]: type === 'number' ? Number(input.value) : input.value }); render(); }); label.append(input); calendarSettings.append(label);
         }
         calendarSettings.append(el('p', 'В скобках — привычные названия тех же игровых дней/месяцев, год остаётся ДБЯ/ПБЯ. Это не Gregorian: неделя5дней, месяц35дней. Профиль Legends368, не Canon365. Три местных праздника условно стоят в конце года; точный месяц/день Геонозиса не утверждается.'));
+        if (history.imported) {
+            for (const input of calendarSettings.querySelectorAll('input,select')) input.disabled = true;
+            calendarSettings.append(el('p', 'Это опора импортированного снимка. Настройки календаря местной игры не изменялись.'));
+        }
         calendar.append(el('p', formatClock(calendarNow(history, start)), 'wa-history-status'), calendarSettings, table);
     }
     view.root.append(panel); render(); close.focus({ preventScroll: true });
