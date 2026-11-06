@@ -1,5 +1,6 @@
 import { loadAtlas, loadReferenceAtlas } from './atlas-data.js';
 import { createRouteNetwork, historyRed } from './route-network.js';
+import { withGamePlaces } from './game-places.js';
 
 let leafletReady;
 function loadLeaflet(base) {
@@ -74,6 +75,7 @@ export class AtlasView {
     constructor(options) {
         Object.assign(this, options);
         validateAtlas(this.atlas);
+        this.baseAtlas = this.atlas;
         this.editing = false;
         this.selected = null;
         this.markers = new Map();
@@ -138,7 +140,7 @@ export class AtlasView {
         searchIcon.setAttribute('aria-hidden', 'true');
         this.search = el('input', 'wa-search');
         this.search.type = 'search';
-        this.search.placeholder = 'Найти планету · RU / EN';
+        this.search.placeholder = 'Найти место';
         this.search.setAttribute('aria-label', 'Поиск места на русском или английском');
         this.search.autocomplete = 'off';
         this.search.addEventListener('input', () => this.searchPlaces());
@@ -148,9 +150,14 @@ export class AtlasView {
             if (event.key === 'Escape') { event.stopPropagation(); this.search.value = ''; this.searchPlaces(); }
         });
         searchRow.append(searchIcon, this.search);
+        if (this.onCalendar) {
+            this.calendarButton = this.button('Открыть календарь с карты', '▦ Календарь', () => this.onCalendar(), 'wa-calendar-button');
+            searchRow.append(this.calendarButton);
+        }
         this.results = el('div', 'wa-results');
         this.results.hidden = true;
-        header.append(titleRow, searchRow, this.results);
+        this.gamePlacesBar = el('div', 'wa-game-places');
+        header.append(titleRow, searchRow, this.gamePlacesBar, this.results);
         this.mapNode = el('div', 'wa-map');
         this.mapNode.setAttribute('aria-label', 'Карта: перемещайте одним пальцем, масштабируйте двумя');
         this.tools = el('nav', 'wa-tools');
@@ -207,6 +214,7 @@ export class AtlasView {
     showRouteImport() {
         if (!this.onRouteImport) return;
         this.root.querySelector('.wa-history-panel')?.remove();
+        this.root.querySelector('.wa-calendar-panel')?.close?.();
         this.importPanel?.remove();
         const panel = this.importPanel = el('section', 'wa-import-panel');
         panel.setAttribute('aria-label', 'Импорт маршрута и календаря');
@@ -246,6 +254,15 @@ export class AtlasView {
         } finally { this.importBusy = false; }
     }
     coords(point) { return [this.atlas.height - point.y, point.x]; }
+    setGamePlaces(places = []) {
+        const signature = JSON.stringify(places);
+        if (signature === this.gamePlacesSignature) return;
+        this.gamePlacesSignature = signature; this.gamePlaces = places;
+        this.atlas = withGamePlaces(this.baseAtlas, places);
+        if (!this.root) return;
+        const center = this.map.getCenter(), zoom = this.map.getZoom();
+        this.renderMap(); this.map.setView(center, zoom, { animate: false });
+    }
     async prepareColors() {
         await Promise.all(this.atlas.places.map(async place => {
             const url = assetUrl(place.image || 'assets/landscape-card.svg', this.base);
@@ -256,16 +273,23 @@ export class AtlasView {
     renderMap() {
         const { L } = this;
         this.map?.remove();
-        this.map = L.map(this.mapNode, { crs: L.CRS.Simple, zoomControl: false, attributionControl: false, minZoom: -3, maxZoom: 5, zoomSnap: 0.25, touchZoom: true, maxBoundsViscosity: 0.8 });
+        this.map = L.map(this.mapNode, { crs: L.CRS.Simple, center: this.coords({ x: this.atlas.width / 2, y: this.atlas.height / 2 }), zoom: -1,
+            zoomControl: false, attributionControl: false, minZoom: -3, maxZoom: 5, zoomSnap: 0.25, touchZoom: true, maxBoundsViscosity: 0.8 });
         const bounds = [[0, 0], [this.atlas.height, this.atlas.width]];
         this.map.setMaxBounds([[-this.atlas.height * .3, -this.atlas.width * .3], [this.atlas.height * 1.3, this.atlas.width * 1.3]]);
         if (this.atlas.background) L.imageOverlay(assetUrl(this.atlas.background, this.base), bounds, { interactive: false, opacity: this.atlas.backgroundOpacity ?? 1 }).addTo(this.map);
         this.renderReference();
-        this.network = this.atlas.context?.paths?.length ? createRouteNetwork(this.atlas.context.paths, this.atlas.places) : null;
+        this.network = this.atlas.context?.paths?.length ? createRouteNetwork(this.atlas.context.paths, this.atlas.places.filter(place => !place.gamePlace)) : null;
         this.routeLayer = L.layerGroup().addTo(this.map);
         this.markers.clear();
+        this.gamePlacesBar.replaceChildren();
+        for (const place of this.atlas.places.filter(place => place.gamePlace)) {
+            this.gamePlacesBar.append(this.button(`Открыть игровой мир ${place.name}`, `◇ ${place.name}`, () => this.select(place, true), 'wa-game-place-button'));
+        }
         for (const place of this.atlas.places) {
+            if (!Number.isFinite(place.x) || !Number.isFinite(place.y)) continue;
             const node = el('div', 'wa-pin-content');
+            if (place.gamePlace) node.classList.add('wa-game-pin');
             node.style.setProperty('--wa-planet', place.imageColor);
             const dot = el('span', 'wa-pin-dot');
             const name = el('span', 'wa-pin-name', place.name);
@@ -273,6 +297,10 @@ export class AtlasView {
             const marker = L.marker(this.coords(place), { icon: L.divIcon({ className: 'wa-pin', html: node, iconSize: [48, 48], iconAnchor: [24, 24] }), title: place.name, keyboard: true, riseOnHover: true });
             marker.on('click', () => this.select(place));
             marker.addTo(this.map);
+            if (place.gameAnchor) {
+                L.polyline([this.coords(place.gameAnchor), this.coords(place)], { color: '#d6b780', weight: 1, opacity: .6, dashArray: '2 5', interactive: false }).addTo(this.map);
+                marker.bindTooltip('Игровая отметка в области сектора · положение условное');
+            }
             marker.getElement()?.setAttribute('aria-label', `Открыть: ${place.name}`);
             this.markers.set(place.id, marker);
         }
@@ -305,7 +333,7 @@ export class AtlasView {
         this.map.fitBounds([[0, 0], [this.atlas.height, this.atlas.width]], { paddingTopLeft: [22, 118], paddingBottomRight: [22, 100], animate: false });
     }
     fitPlaces() {
-        this.map.fitBounds(this.atlas.places.map(place => this.coords(place)), { paddingTopLeft: [36, 145], paddingBottomRight: [105, 110], animate: false });
+        this.map.fitBounds(this.atlas.places.filter(place => Number.isFinite(place.x) && Number.isFinite(place.y)).map(place => this.coords(place)), { paddingTopLeft: [36, 145], paddingBottomRight: [105, 110], animate: false });
     }
     positionLabels() {
         const occupied = [];
@@ -344,7 +372,8 @@ export class AtlasView {
         image.append(imageOverlay, hide);
         const body = el('div', 'wa-card-body');
         if (place.subtitle || this.atlas.era) body.append(el('p', 'wa-card-meta', [place.subtitle, this.atlas.era].filter(Boolean).join(' · ')));
-        const nearby = this.atlas.places.filter(other => other.id !== place.id && this.map.latLngToContainerPoint(this.coords(other)).distanceTo(this.map.latLngToContainerPoint(this.coords(place))) < 20);
+        const located = Number.isFinite(place.x) && Number.isFinite(place.y);
+        const nearby = located ? this.atlas.places.filter(other => other.id !== place.id && Number.isFinite(other.x) && Number.isFinite(other.y) && this.map.latLngToContainerPoint(this.coords(other)).distanceTo(this.map.latLngToContainerPoint(this.coords(place))) < 20) : [];
         if (nearby.length) {
             const row = el('div', 'wa-nearby');
             row.append(el('span', '', 'Рядом на карте:'));
@@ -355,6 +384,7 @@ export class AtlasView {
         if (place.eraNote) body.append(el('p', 'wa-era-note', place.eraNote));
         if (place.continuityNote) body.append(el('p', 'wa-era-note', place.continuityNote));
         if (place.mapNote) body.append(el('p', 'wa-era-note', place.mapNote));
+        if (place.gamePlace && place.source) body.append(el('p', 'wa-era-note', `Источник игровой географии: ${place.source}`));
         if (place.detailText) {
             const details = el('details', 'wa-details');
             details.append(el('summary', '', 'Подробнее'), el('p', 'wa-card-text', place.detailText));
@@ -375,12 +405,12 @@ export class AtlasView {
         this.card.hidden = false;
         this.root.classList.add('wa-has-card');
         this.positionLabels();
-        if (center) this.map.setView(this.coords(place), Math.max(this.map.getZoom(), -0.7), { animate: false });
+        if (center && located) this.map.setView(this.coords(place), Math.max(this.map.getZoom(), -0.7), { animate: false });
         this.keepSelectedVisible();
     }
     keepSelectedVisible() {
         const place = this.atlas.places.find(point => point.id === this.selected);
-        if (!place || this.card.hidden) return;
+        if (!place || this.card.hidden || !Number.isFinite(place.x) || !Number.isFinite(place.y)) return;
         const bottom = this.root.getBoundingClientRect().bottom - this.card.getBoundingClientRect().top + 35;
         this.map.panInside(this.coords(place), { paddingTopLeft: [50, 155], paddingBottomRight: [65, bottom], animate: false });
     }
@@ -432,10 +462,16 @@ export class AtlasView {
         this.routeLayer.clearLayers();
         this.routeGaps = [];
         this.unmappedRouteStops = false;
+        this.estimatedRoute = false;
         const points = this.displayPoints?.() || this.route().map(id => this.atlas.places.find(place => place.id === id)).filter(Boolean);
         for (let i = 1; i < points.length; i++) {
-            if (!points[i - 1].id || !points[i].id) { this.unmappedRouteStops = true; continue; }
+            if (!points[i - 1].id || !points[i].id || !Number.isFinite(points[i - 1].x) || !Number.isFinite(points[i].x)) { this.unmappedRouteStops = true; continue; }
             const age = points.length === 2 ? 1 : (i - 1) / (points.length - 2);
+            if (points[i - 1].gamePlace || points[i].gamePlace) {
+                this.estimatedRoute = true;
+                this.L.polyline([this.coords(points[i - 1]), this.coords(points[i])], { color: historyRed(age), weight: 2, opacity: .8, dashArray: '5 8', interactive: false, className: 'wa-route-estimated' }).addTo(this.routeLayer);
+                continue;
+            }
             const resolved = this.network?.resolve(points[i - 1].id, points[i].id);
             if (!resolved || resolved.gap) {
                 this.routeGaps.push({ from: points[i - 1], to: points[i] });
@@ -448,7 +484,7 @@ export class AtlasView {
         }
         const currentId = this.currentPlaceId ? this.currentPlaceId() : points.at(-1)?.id;
         const current = this.atlas.places.find(place => place.id === currentId);
-        if (current) this.L.circleMarker(this.coords(current), { radius: 11, color: current.imageColor, weight: 1.4, fill: false, interactive: false, className: 'wa-player-position' }).addTo(this.routeLayer);
+        if (current && Number.isFinite(current.x) && Number.isFinite(current.y)) this.L.circleMarker(this.coords(current), { radius: 11, color: current.imageColor, weight: 1.4, ...(current.gamePlace ? { dashArray: '3 4' } : {}), fill: false, interactive: false, className: 'wa-player-position' }).addTo(this.routeLayer);
         if (!this.editing && this.message) this.message.textContent = this.routeStatus();
     }
     routeStatus() {
@@ -458,7 +494,7 @@ export class AtlasView {
             const gap = this.routeGaps[0];
             return `${position}Разрыв: ${gap.from.name} → ${gap.to.name} · в исходном слое нет соединения${this.routeGaps.length > 1 ? ` · ещё ${this.routeGaps.length - 1}` : ''}`;
         }
-        return position ? `${position}${this.unmappedRouteStops ? 'часть пути вне карты' : `${this.route().length} отмеченных остановок`}` : this.atlas.descriptionShort || 'Коснитесь планеты';
+        return position ? `${position}${this.unmappedRouteStops ? 'часть пути вне карты' : `${this.route().length} отмеченных остановок`}${this.estimatedRoute ? ' · пунктир — схема поездки, не точный гипермаршрут' : ''}` : this.atlas.descriptionShort || 'Коснитесь планеты';
     }
     async importFile() {
         const file = this.fileInput.files?.[0];
@@ -474,7 +510,8 @@ export class AtlasView {
         } catch (error) { this.message.textContent = `Импорт: ${error.message}`; }
     }
     async replaceAtlas(atlas) {
-        this.atlas = atlas;
+        this.baseAtlas = atlas;
+        this.atlas = withGamePlaces(atlas, this.gamePlaces);
         await this.prepareColors();
         this.title.textContent = atlas.title;
         this.sourceButton.hidden = !atlas.schematic;

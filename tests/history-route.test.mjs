@@ -4,8 +4,10 @@ import { collectHistory, liveEvents, eventRoute, requestRoute, calendarRows } fr
 import { hash } from '../../Extension-WorldMemory/history.js';
 import { createArchive, readArchive } from '../../Extension-WorldMemory/archive-store.js';
 import { installArchiveRuntime } from '../../Extension-WorldMemory/archive-runtime.js';
-import { resolveCalendar } from '../../Extension-WorldMemory/timeline-calendar.js';
+import { resolveCalendar, formatCalendar } from '../../Extension-WorldMemory/timeline-calendar.js';
 import { readRouteSnapshot, snapshotBinding, snapshotHistory, applyRouteSnapshot, undoRouteChange, messageRevision } from '../route-import.js';
+import { calendarSelection } from '../calendar-view.js';
+import { withGamePlaces } from '../game-places.js';
 
 const atlas = { id: 'example', places: [{ id: 'a', name: 'Альфа', aliases: ['Alpha'] }, { id: 'b', name: 'Бета', aliases: ['Beta'] }] };
 const history = packets => collectHistory({ name1: 'Player' }, atlas, { packets });
@@ -117,4 +119,57 @@ test('an invalid portable file preserves state and a successful import can be un
     const undone = undoRouteChange(imported);
     assert.deepEqual(undone.state, before);
     assert.deepEqual(undone.route, route);
+});
+
+test('selecting a calendar day returns that days map events and retains lower-bound dates', () => {
+    const rows = [
+        { placeId: 'a', place: 'Альфа', clock: { elapsedHours: 0 } },
+        { placeId: 'b', place: 'Бета', clock: { elapsedHours: 24, incomplete: true } },
+        { place: 'Не датировано', clock: null },
+    ];
+    assert.deepEqual(calendarSelection(rows, 1).map(row => row.placeId), ['a']);
+    const selected = calendarSelection(rows, 2);
+    assert.deepEqual(selected.map(row => row.placeId), ['b']);
+    assert.equal(selected[0].clock.incomplete, true);
+});
+
+test('a corrected portable calendar retains successive days and uncertain multi-day travel after reload', () => {
+    const input = portableInput();
+    input.calendarStart = { display: 'sw-legends', swYear: 22, swDay: 6, approximate: true, cycleHours: 24,
+        note: 'A cycle is24h in this game; several days have no specified upper bound.' };
+    input.calendar.rows = [0, 24, 48, 97].map((hours, offset) => {
+        const clock = { elapsedHours: hours, gameDay: Math.floor(hours / 24) + 1, hourKnown: false,
+            approximate: true, incomplete: offset > 0, period: offset === 3 ? 'evening' : null };
+        clock.label = formatCalendar(clock, input.calendarStart);
+        return { place: 'Альфа', source: `Сцена${offset}`, offset, clock };
+    });
+    input.calendar.now = input.calendar.rows.at(-1).clock;
+    const parsed = readRouteSnapshot(input, atlas);
+    const context = { chat: [{ is_user: false, mes: 'Ты прибыл на Альфу.' }] }, local = history([]);
+    const saved = applyRouteSnapshot({}, parsed, snapshotBinding(context, local, parsed.boundary), []);
+    const reloaded = JSON.parse(JSON.stringify(saved));
+    const calendar = snapshotHistory(reloaded.importedSnapshot, context, local, atlas, resolveCalendar).calendar;
+    assert.deepEqual(calendar.rows.map(row => Math.floor(row.clock.elapsedHours / 24) + 1), [1, 2, 3, 5]);
+    assert.equal(calendar.now.incomplete, true); assert.equal(calendar.now.hourKnown, false);
+    assert.equal(reloaded.importedSnapshot.calendarStart.cycleHours, 24);
+    const wm = resolveCalendar([], { worldAtlas: { tracking: { example: reloaded } } }, undefined, context.chat);
+    assert.deepEqual(wm.rows, calendar.rows); assert.equal(wm.now.label, calendar.now.label);
+});
+
+test('a private game world becomes a labelled approximate point and undo restores the prior map', () => {
+    const base = { ...atlas, width: 1000, height: 1000, context: { points: [{ name: 'Опорный сектор', x: 500, y: 500 }] } };
+    const input = portableInput();
+    input.gamePlaces = [{ id: 'game:gamma', name: 'Гамма', anchorNames: ['Опорный сектор'], source: 'Открытая сцена',
+        mapNote: 'Только область сектора; точная система не установлена.' }];
+    input.events = [{ placeId: 'game:gamma', placeName: 'Гамма', status: 'arrived', source: 'Сцена', offset: 0 }];
+    const original = { events: [], manual: true }, parsed = readRouteSnapshot(input, base);
+    const imported = applyRouteSnapshot(original, parsed, {}, ['a']);
+    const displayed = withGamePlaces(base, imported.importedSnapshot.gamePlaces);
+    const point = displayed.places.find(place => place.id === 'game:gamma');
+    assert.equal(point.gamePlace, true); assert.equal(point.gamePlacement, 'sector');
+    assert.match(point.mapNote, /не координаты/); assert.equal(parsed.events[0].placeId, point.id);
+    assert.equal(base.places.some(place => place.gamePlace), false);
+    const undone = undoRouteChange(imported);
+    assert.deepEqual(undone.state, original); assert.deepEqual(undone.route, ['a']);
+    assert.deepEqual(withGamePlaces(base, undone.state.importedSnapshot?.gamePlaces), base);
 });

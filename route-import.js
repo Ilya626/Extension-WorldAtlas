@@ -1,4 +1,5 @@
 import { dateValue, findPlace, revision, liveEvents } from './history-route.js';
+import { readGamePlaces, withGamePlaces } from './game-places.js';
 
 // A portable baseline, followed only by non-overlapping, source-bound new L0.
 export function readRouteSnapshot(value, atlas) {
@@ -27,6 +28,8 @@ export function readRouteSnapshot(value, atlas) {
         return { label: text(value.label), ...(Number.isFinite(value.elapsedHours) ? { elapsedHours: value.elapsedHours } : {}),
             incomplete: Boolean(value.incomplete), approximate: Boolean(value.approximate), hourKnown: value.hourKnown !== false, period: value.period || null };
     };
+    const gamePlaces = readGamePlaces(input.gamePlaces);
+    atlas = withGamePlaces(atlas, gamePlaces);
     const events = input.events.map((event, index) => {
         if (!text(event.placeName, 300).trim() || !['arrived', 'departed'].includes(event.status))
             throw new Error(`Некорректное место или перемещение в событии ${index + 1}.`);
@@ -41,10 +44,15 @@ export function readRouteSnapshot(value, atlas) {
     const anchor = input.calendarStart || {};
     const calendarStart = { label: text(anchor.label, 300), approximate: Boolean(anchor.approximate),
         display: anchor.display === 'sw-legends' ? 'sw-legends' : 'game' };
+    if (anchor.note) calendarStart.note = text(anchor.note, 1000);
+    if (anchor.cycleHours !== undefined) {
+        if (!Number.isFinite(anchor.cycleHours) || anchor.cycleHours <= 0 || anchor.cycleHours > 10000) throw new Error('Некорректная длина игрового цикла.');
+        calendarStart.cycleHours = anchor.cycleHours;
+    }
     for (const key of ['offsetDays', 'swYear', 'swDay']) if (Number.isFinite(anchor[key])) calendarStart[key] = anchor[key];
     if (input.boundary?.length > 5) throw new Error('В файле слишком много опорных сообщений. Прежний маршрут сохранён.');
     const boundary = Array.isArray(input.boundary) ? input.boundary.map(value => text(value, 100)) : [];
-    return { format: input.format, version: 1, atlasId: atlas.id, calendarStart, boundary,
+    return { format: input.format, version: 1, atlasId: atlas.id, calendarStart, boundary, ...(gamePlaces.length ? { gamePlaces } : {}),
         coverage: { throughMessage: coverage.throughMessage, messageCount: coverage.messageCount,
             tailMessages: coverage.messageCount - coverage.throughMessage }, events,
         calendar: { rows, now: clock(input.calendar.now) } };

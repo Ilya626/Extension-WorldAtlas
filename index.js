@@ -1,7 +1,8 @@
 import { AtlasView } from './viewer.js';
 import { loadAtlas, loadDefaultAtlas } from './atlas-data.js';
-import { collectHistory, liveEvents, eventRoute, requestRoute, calendarRows } from './history-route.js';
+import { collectHistory, liveEvents, eventRoute, requestRoute, calendarRows, findPlace } from './history-route.js';
 import { showHistoryPanel } from './history-panel.js';
+import { showCalendar } from './calendar-view.js';
 import { readRouteSnapshot, snapshotBinding, snapshotHistory, applyRouteSnapshot, undoRouteChange } from './route-import.js';
 
 const OWNER = 'worldAtlas';
@@ -72,6 +73,7 @@ async function importRoute(file) {
     const state = tracking(), next = applyRouteSnapshot(state, imported, snapshotBinding(ctx, local, imported.boundary), route());
     for (const key of Object.keys(state)) delete state[key];
     Object.assign(state, next);
+    view.setGamePlaces(imported.gamePlaces);
     metadata[OWNER].routes ??= {};
     metadata[OWNER].routes[view.atlas.id] = eventRoute(imported.events);
     await ctx.saveMetadata(); view.contextChanged(); openHistory();
@@ -91,7 +93,7 @@ function positionLabel() {
     if (last?.status === 'departed') return `${label}: в пути · прибытие не установлено`;
     if (last && !last.placeId) return `${label}: ${last.placeName} · нет точки на карте`;
     const place = view.atlas.places.find(place => place.id === route().at(-1));
-    return place ? `${label}: ${place.name}` : `${label}: место неизвестно`;
+    return place ? `${label}: ${place.name}${place.gamePlace ? place.gamePlacement === 'unlocated' ? ' · игровой мир, координаты не заданы' : ' · игровая отметка, положение условное' : ''}` : `${label}: место неизвестно`;
 }
 function displayPoints() {
     const state = tracking();
@@ -115,13 +117,14 @@ async function syncHistory() {
     if (!view || !context().chatId || (settings().auto === false && !tracking().importedSnapshot) || modelBusy || syncing) return;
     syncing = (async () => {
         await prepareImportedCalendar();
+        view.setGamePlaces(tracking().importedSnapshot?.gamePlaces);
         const state = tracking(), current = history();
         if (state.importedSnapshot) {
             const next = eventRoute(current.importEvents);
             if (!state.manual && JSON.stringify(next) !== JSON.stringify(route())) {
                 context().chatMetadata[OWNER].routes[view.atlas.id] = next; await context().saveMetadata();
             }
-            view.drawRoute(); view.root.querySelector('.wa-history-panel')?.dispatchEvent(new Event('worldatlas:history-changed')); return;
+            view.drawRoute(); view.root.querySelector('.wa-history-panel')?.dispatchEvent(new Event('worldatlas:history-changed')); view.root.querySelector('.wa-calendar-panel')?.refresh?.(); return;
         }
         const events = liveEvents(state.events, current, view.atlas);
         const changed = JSON.stringify(events) !== JSON.stringify(state.events);
@@ -135,6 +138,7 @@ async function syncHistory() {
         }
         view.drawRoute();
         view.root.querySelector('.wa-history-panel')?.dispatchEvent(new Event('worldatlas:history-changed'));
+        view.root.querySelector('.wa-calendar-panel')?.refresh?.();
     })();
     try { await syncing; } finally { syncing = null; }
 }
@@ -170,6 +174,7 @@ async function updateHistory() {
     } finally { modelBusy = false; requestController = null; void syncHistory().catch(error => console.warn('[World Atlas]', error.message)); }
 }
 function openHistory() {
+    view.root.querySelector('.wa-calendar-panel')?.close?.();
     if (!context().chatId) { toastr.info('Откройте чат для маршрута игрока.', 'World Atlas'); return; }
     showHistoryPanel(view, { settings, history, state: tracking, connection, route,
         busy: () => modelBusy, events,
@@ -186,6 +191,7 @@ function openHistory() {
         resume: async () => {
             const state = tracking(); checkpoint(state); state.manual = false;
             delete state.importedSnapshot;
+            view.setGamePlaces([]);
             state.events = liveEvents(state.events, history(), view.atlas);
             context().chatMetadata[OWNER].routes[view.atlas.id] = eventRoute(state.events);
             await context().saveMetadata(); view.contextChanged();
@@ -194,8 +200,35 @@ function openHistory() {
             const state = tracking(), previous = undoRouteChange(state); if (!previous) return;
             for (const key of Object.keys(state)) delete state[key];
             Object.assign(state, previous.state);
+            view.setGamePlaces(state.importedSnapshot?.gamePlaces);
             context().chatMetadata[OWNER].routes[view.atlas.id] = previous.route;
             await context().saveMetadata(); view.contextChanged();
+        },
+    });
+}
+function openCalendar() {
+    view.root.querySelector('.wa-history-panel')?.remove();
+    view.importPanel?.remove();
+    const anchor = () => tracking().importedSnapshot?.calendarStart || tracking().calendarStart || {};
+    showCalendar(view, {
+        rows: () => {
+            const routeEvents = events();
+            return calendarRows(history(), routeEvents, anchor()).map(row => {
+                const event = routeEvents.find(event => event.source === row.source && event.offset === row.offset);
+                const place = findPlace(event?.placeId || row.place, view.atlas);
+                return { ...row, placeId: Number.isFinite(place?.x) && Number.isFinite(place?.y) ? place.id : null };
+            });
+        }, anchor,
+        onSelect: row => {
+            const event = events().find(event => event.source === row.source && event.offset === row.offset);
+            const place = findPlace(event?.placeId || row.place, view.atlas);
+            if (!place) { view.message.textContent = `${row.place || 'Место не установлено'} · координат для этой сцены нет`; return; }
+            view.root.querySelector('.wa-calendar-panel')?.close?.();
+            view.select(place, true);
+            const note = document.createElement('p'); note.className = 'wa-era-note wa-calendar-selection';
+            const date = (row.clock?.label || row.date?.text || 'Дата неизвестна').replace(/ · есть неуточнённые интервалы$/, '');
+            note.textContent = `${date} · Исторический просмотр`;
+            view.card.querySelector('.wa-card-body').prepend(note);
         },
     });
 }
@@ -221,6 +254,7 @@ async function openAtlas() {
                         await syncHistory();
                     },
                     onHistory: openHistory,
+                    onCalendar: openCalendar,
                     onRouteImport: importRoute,
                     positionLabel,
                     displayPoints,
@@ -258,13 +292,13 @@ jQuery(async () => {
     document.querySelector('#extensionsMenu')?.append(importButton);
     const panel = document.createElement('div');
     panel.className = 'world-atlas-settings';
-    panel.innerHTML = '<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>World Atlas · 0.4.3</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content"><p>30 карточек доступны сразу. Координаты и гиперлинии — «Карта из источника». Для короткого файла маршрута откройте нужный чат и нажмите кнопку ниже: можно выбрать любой файл или вставить JSON текстом.</p><button type="button" class="menu_button">Открыть атлас</button><button type="button" class="menu_button world-atlas-import">Импорт маршрута и календаря · файл / JSON</button></div></div>';
+    panel.innerHTML = '<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>World Atlas · 0.4.4</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content"><p>30 карточек доступны сразу. Координаты и гиперлинии — «Карта из источника». Для короткого файла маршрута откройте нужный чат и нажмите кнопку ниже: можно выбрать любой файл или вставить JSON текстом. Календарь открывается прямо из строки поиска карты.</p><button type="button" class="menu_button">Открыть атлас</button><button type="button" class="menu_button world-atlas-import">Импорт маршрута и календаря · файл / JSON</button></div></div>';
     panel.querySelector('button').addEventListener('click', openAtlas);
     panel.querySelector('.world-atlas-import').addEventListener('click', openRouteImport);
     document.querySelector('#extensions_settings')?.append(panel);
     const ctx = context();
     ctx.eventSource.on(ctx.eventTypes.CHAT_CHANGED, () => {
-        requestController?.abort(); view?.root?.querySelector('.wa-history-panel')?.remove(); view?.importPanel?.remove(); view?.contextChanged();
+        requestController?.abort(); view?.root?.querySelector('.wa-history-panel')?.remove(); view?.root?.querySelector('.wa-calendar-panel')?.close?.(); view?.importPanel?.remove(); view?.contextChanged();
         void syncHistory().catch(error => console.warn('[World Atlas]', error.message));
     });
     let timer;

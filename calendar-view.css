@@ -1,0 +1,58 @@
+.world-atlas .wa-calendar-backdrop{position:absolute;inset:0;z-index:1199;border:0;background:#03060b55;backdrop-filter:blur(2px);cursor:default}
+.wa-calendar-panel{position:absolute;z-index:1200;bottom:0;left:0;right:0;max-height:86dvh;max-width:520px;margin:0 auto;background:#121822fa;border:1px solid #d7e3f230;border-bottom:0;border-radius:24px 24px 0 0;color:#f4efe7;box-shadow:0 -18px 80px #0007;overflow:hidden;font:14px/1.45 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;pointer-events:auto;display:flex;flex-direction:column;text-align:left}
+.wa-calendar-panel *{box-sizing:border-box}
+.wa-cal-handle{width:36px;height:4px;margin:9px auto 0;flex:none;border-radius:4px;background:#68718188}
+.wa-cal-heading{display:flex;justify-content:space-between;align-items:center;padding:8px 17px 10px;flex:none}
+.wa-cal-eyebrow{font-size:9px;letter-spacing:.17em;color:#a6b8c9}
+.wa-cal-heading h2{font:550 23px/1.2 system-ui;margin:3px 0;color:#f4efe7;text-shadow:none}
+.wa-calendar-panel .wa-cal-button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px;font:inherit;line-height:1.15;border:1px solid #d7e3f223;border-radius:12px;padding:0 12px;background:#1a2230;color:#e9edf2;cursor:pointer;touch-action:manipulation;text-shadow:none;box-shadow:none;margin:0}
+.wa-calendar-panel .wa-cal-button:focus-visible,.wa-cal-event:focus-visible{outline:2px solid #f4c277;outline-offset:2px}
+.wa-calendar-panel .wa-cal-close{font-size:25px;border:0;background:#ffffff08;border-radius:50%}
+.wa-cal-body{overflow-y:auto;overscroll-behavior:contain;padding:0 15px calc(18px + env(safe-area-inset-bottom));scrollbar-width:thin}
+.wa-cal-modes{display:flex;gap:4px;align-items:center;background:#080d1577;padding:4px;border-radius:14px;margin-bottom:11px}
+.wa-calendar-panel .wa-cal-modes .wa-cal-button{min-height:40px;background:none;border:0;border-radius:10px;flex:1;font-size:13px}
+.wa-calendar-panel .wa-cal-modes .wa-cal-button[aria-pressed=true]{background:#303a48;color:#fff}
+.wa-calendar-panel .wa-cal-modes .wa-cal-latest{flex:1.5;color:#bdc7d3;font-size:12px}
+.wa-cal-month{display:flex;align-items:center;justify-content:space-between;gap:5px;margin:0 0 10px}
+.wa-cal-month-label{text-align:center;min-width:0;display:grid;gap:2px}
+.wa-cal-month-label strong{font-weight:550;font-size:15px;overflow-wrap:anywhere}
+.wa-cal-month-label small{color:#aebac9;font-size:11px}
+.wa-calendar-panel .wa-cal-arrow{background:#ffffff05;border-color:#ffffff12;font-size:25px;flex:none;padding:0 11px}
+.wa-calendar-panel .wa-cal-button:disabled{opacity:.28;cursor:default}
+.wa-cal-weekdays,.wa-cal-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
+.wa-cal-weekdays{margin-bottom:6px}
+.wa-cal-weekdays abbr{text-decoration:none;text-align:center;font-size:10px;color:#aab7c6;white-space:nowrap;letter-spacing:-.02em}
+.wa-calendar-panel .wa-cal-day{position:relative;min-width:0;min-height:44px;flex-direction:column;border-color:transparent;background:#ffffff03;border-radius:10px;padding:5px 0 9px;font-size:14px;gap:0}
+.wa-calendar-panel .wa-cal-day[aria-pressed=true]{background:#ef5b5b24;color:#fff;border-color:#ef5b5b35}
+.wa-calendar-panel .wa-cal-day.wa-cal-edge[aria-pressed=true]{background:#c94c51;border-color:#ff969a77;color:#fff}
+.wa-cal-dot{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;line-height:9px;color:#f28b8d}
+.wa-cal-dot:empty{height:4px;width:4px;border-radius:50%;background:#ef777a;bottom:5px}
+.wa-cal-day[aria-pressed=true] .wa-cal-dot{color:#fff;background-color:transparent}
+.wa-cal-day[aria-pressed=true] .wa-cal-dot:empty{background:#fff}
+.wa-cal-legend{display:flex;justify-content:space-between;gap:7px;color:#96a5b7;font-size:10px;padding:9px 1px 11px;border-bottom:1px solid #d7e3f21c}
+.wa-cal-legend span:first-child{color:#ed8b91}
+.wa-cal-hint,.wa-cal-warning,.wa-cal-empty{font-size:12px;line-height:1.5;margin:9px 0;color:#b5c2d0}
+.wa-cal-warning{padding:10px 11px;border-radius:10px;background:#e6b9710a;border:1px solid #d8b37420;color:#d5bea0}
+.wa-calendar-panel .wa-cal-undated{width:100%;justify-content:space-between;font-size:12px;background:none;border-color:#e6b97122;color:#d5bea0;margin-top:10px}
+.wa-cal-undated[aria-pressed=true]{background:#e6b97112!important}
+.wa-cal-selection{padding-top:13px}
+.wa-cal-selection-title{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.wa-cal-selection-title h3{font:550 17px/1.3 system-ui;margin:0;color:#f4efe7;text-shadow:none}
+.wa-cal-selection-title>span{font-size:11px;color:#9fadc0;white-space:nowrap}
+.wa-cal-date{font-size:11px;color:#a8b7c6;margin:4px 0 10px;overflow-wrap:anywhere}
+.world-atlas .wa-cal-event{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#ffffff03;border:1px solid #d7e3f21e;border-radius:13px;padding:12px;text-align:left;margin:8px 0 0;color:#f4efe7;font:inherit;box-shadow:none;text-shadow:none;min-height:72px}
+.wa-cal-event-text{min-width:0;display:grid;gap:4px}
+.wa-cal-event strong{font-weight:550;font-size:15px}
+.wa-cal-event-time{font-size:11px;color:#bfccd9;overflow-wrap:anywhere;line-height:1.5}
+.wa-cal-event small{font-size:10px;color:#96a6ba;overflow-wrap:anywhere}
+.wa-cal-event-status{font-size:10px;color:#e1a8ac}
+.wa-cal-event .wa-cal-source{font-size:9px;color:#7f90a6}
+.wa-cal-event-action{flex:none;font-size:10px;line-height:1.45;color:#9cafc3;white-space:pre-line;text-align:right;max-width:66px}
+.wa-cal-locatable{cursor:pointer;touch-action:manipulation}
+.wa-cal-locatable .wa-cal-event-action{color:#ef9296}
+.wa-cal-profile{margin:16px 0 0;color:#98a8ba;font-size:11px;border-top:1px solid #d7e3f21c;padding-top:6px}
+.wa-cal-profile summary{cursor:pointer;min-height:40px;align-content:center}
+.wa-cal-profile p{margin:6px 0 10px;font-size:11px;line-height:1.6;color:#a5b4c7}
+@media(min-width:700px){.wa-calendar-panel{left:auto;right:18px;bottom:18px;border-bottom:1px solid #d7e3f230;border-radius:24px;width:430px;max-height:calc(100dvh - 36px);margin:0}.wa-cal-body{padding-bottom:18px}}
+@media(max-height:650px){.wa-calendar-panel{max-height:94dvh}.wa-cal-heading{padding-top:4px;padding-bottom:6px}.wa-cal-body{padding-top:0}}
+@media(prefers-reduced-motion:reduce){.wa-calendar-panel *{scroll-behavior:auto!important}}
