@@ -24,6 +24,7 @@ export function collectHistory(ctx, atlas, snapshot = null) {
             originals: (packet.sources || []).filter(source => !source.hidden).map(source => ({ id: source.id, name: source.name, isUser: source.isUser,
                 text: source.text.replace(/<(think|analysis|reasoning)\b[^>]*>[\s\S]*?(?:<\/\1>|$)/gi, '').replace(/\[mu:set\s+[^\]]+\][\s\S]*?(?:\[\/mu\]|$)/gi, '') })),
             revision: revision(packet.text), sourceIds: packet.sourceMessageIds || [], timeline,
+            sourceIndices: Object.fromEntries((packet.sources || []).map(source => [source.id, source.index])),
             through: packet.sources?.length ? Math.max(...packet.sources.map(source => source.index)) : packet.turnRange?.[1] ?? packet.order });
     }
     evidence.sort((a, b) => a.index - b.index || a.id.localeCompare(b.id));
@@ -57,7 +58,7 @@ export function liveEvents(saved, history, atlas) {
 }
 export function eventRoute(events) {
     const points = [];
-    for (const event of events) if (event.placeId && event.status !== 'departed' && points.at(-1) !== event.placeId) points.push(event.placeId);
+    for (const event of events) if (event.placeId && !event.boundaryUncertain && event.status !== 'departed' && points.at(-1) !== event.placeId) points.push(event.placeId);
     return points;
 }
 export function calendarRows(history, events, start = {}) {

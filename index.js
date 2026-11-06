@@ -87,6 +87,7 @@ function positionLabel() {
     const source = history();
     const label = source.imported ? `Импорт до ${source.coverage.throughMessage}${source.importExtended ? ` + L0 до ${source.localThrough + 1}` : ''}${state.manual ? ' · ручная отметка' : ''}`
         : state.manual ? 'Ручная отметка' : source.through >= 0 ? `По L0 до сообщения ${source.through + 1}` : 'По L0';
+    if (last?.boundaryUncertain) return `${label}: ${last.placeName} · положение после границы импорта не подтверждено`;
     if (last?.status === 'departed') return `${label}: в пути · прибытие не установлено`;
     if (last && !last.placeId) return `${label}: ${last.placeName} · нет точки на карте`;
     const place = view.atlas.places.find(place => place.id === route().at(-1));
@@ -98,7 +99,7 @@ function displayPoints() {
     const points = [];
     for (const event of events()) {
         if (event.status === 'departed') continue;
-        const place = event.placeId ? view.atlas.places.find(place => place.id === event.placeId) : { id: null, name: event.placeName };
+        const place = event.placeId && !event.boundaryUncertain ? view.atlas.places.find(place => place.id === event.placeId) : { id: null, name: event.placeName };
         if (place && (!place.id || points.at(-1)?.id !== place.id)) points.push(place);
     }
     return points;
@@ -108,7 +109,7 @@ function currentPlaceId() {
     if (state.manual) return route().at(-1);
     if (state.importedSnapshot && history().importBoundaryMissing) return null;
     const last = events().at(-1);
-    return last?.status === 'departed' ? null : last?.placeId || null;
+    return last?.status === 'departed' || last?.boundaryUncertain ? null : last?.placeId || null;
 }
 async function syncHistory() {
     if (!view || !context().chatId || (settings().auto === false && !tracking().importedSnapshot) || modelBusy || syncing) return;

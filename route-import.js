@@ -22,8 +22,10 @@ export function readRouteSnapshot(value, atlas) {
     };
     const clock = value => {
         if (!text(value?.label)) throw new Error('В файле отсутствует подпись игровой даты.');
+        if (Number.isFinite(value.elapsedHours) && value.elapsedHours < 0) throw new Error('В файле отрицательное прошедшее время. Прежний маршрут сохранён.');
+        if (value.period != null && !['morning', 'noon', 'afternoon', 'evening', 'night'].includes(value.period)) throw new Error('Неизвестный период суток в файле.');
         return { label: text(value.label), ...(Number.isFinite(value.elapsedHours) ? { elapsedHours: value.elapsedHours } : {}),
-            incomplete: Boolean(value.incomplete), approximate: Boolean(value.approximate), hourKnown: value.hourKnown !== false };
+            incomplete: Boolean(value.incomplete), approximate: Boolean(value.approximate), hourKnown: value.hourKnown !== false, period: value.period || null };
     };
     const events = input.events.map((event, index) => {
         if (!text(event.placeName, 300).trim() || !['arrived', 'departed'].includes(event.status))
@@ -57,11 +59,11 @@ function locate(hashes, values) {
 }
 export function snapshotBinding(context, history, sourceBoundary = []) {
     const hashes = (context.chat || []).map(messageRevision);
-    const matched = locate(hashes, sourceBoundary).length === 1;
+    const sourceMatches = locate(hashes, sourceBoundary), matched = sourceMatches.length === 1;
     return { chat: revision(JSON.stringify((context.chat || []).map(message => [Boolean(message.is_user), Boolean(message.is_system), message.mes]))),
         history: revision(JSON.stringify(history.evidence.map(source => [source.id, source.revision, source.through]))),
         attachment: { mode: matched ? 'source' : 'local', hashes: matched ? sourceBoundary : hashes.slice(-3),
-            empty: !hashes.length, messageCount: hashes.length } };
+            index: matched ? sourceMatches[0] : hashes.length - 1, empty: !hashes.length, messageCount: hashes.length } };
 }
 
 export const messageRevision = message => revision(`${Boolean(message.is_user)}:${String(message.mes || '').replace(/\r\n/g, '\n').trim()}`);
@@ -74,13 +76,20 @@ export function snapshotHistory(snapshot, context, local, atlas, resolver, saved
     const attachment = snapshot.binding.attachment || { mode: 'source', hashes: snapshot.boundary };
     const matches = locate((context.chat || []).map(messageRevision), attachment.hashes);
     const boundary = attachment.empty ? -1 : matches.length === 1 ? matches[0] : null;
-    const fresh = boundary === null ? [] : local.evidence.filter(source => source.index > boundary);
+    const fresh = boundary === null ? [] : local.evidence.filter(source => source.through > boundary);
+    const overlapping = fresh.filter(source => source.index <= boundary);
     const oldEvents = resolveImportedPlaces(snapshot.events, atlas);
-    const extraEvents = liveEvents(savedEvents, { evidence: fresh }, atlas);
+    const extraEvents = liveEvents(savedEvents, { evidence: fresh }, atlas).flatMap(event => {
+        const source = overlapping.find(source => source.id === event.source);
+        if (!source) return [event];
+        const indices = (event.sourceIds || []).map(id => source.sourceIndices?.[id]).filter(Number.isFinite);
+        if (indices.length && indices.every(index => index <= boundary)) return [];
+        return [{ ...event, offsetHours: null, time: null, boundaryUncertain: !indices.length || indices.some(index => index <= boundary) }];
+    });
     let calendar = snapshot.calendar, blocked = boundary === null ? 'граница среза не найдена однозначно в открытом чате' : '';
-    if (boundary !== null && local.through > boundary && !fresh.length)
-        blocked = 'новый L0 перекрывает границу импорта; его часть не добавлена, чтобы не дублировать время и события';
-    if (fresh.length) {
+    if (overlapping.length) blocked = 'L0 перекрывает границу импорта: подтверждённые новые места добавлены, его прошедшее время не отделяется и остаётся неизвестным';
+    if (local.calendar?.imported && local.calendar.importBoundary === boundary) calendar = local.calendar;
+    else if (fresh.length) {
         if (resolver && Number.isFinite(snapshot.calendar.now.elapsedHours)) {
             const base = snapshot.calendar.now;
             const seed = (id, order, elapsedHours) => ({ id, text: 'imported clock seed', textRevision: id, order, orderKnown: true,
@@ -88,7 +97,7 @@ export function snapshotHistory(snapshot, context, local, atlas, resolver, saved
             const packets = [seed('import-baseline', -2, base.elapsedHours)];
             if (base.incomplete || !base.hourKnown) packets.push(seed('import-uncertainty', -1, null));
             packets.push(...fresh.map(source => {
-                const info = source.timeline || source.timing;
+                const info = source.index <= boundary ? { elapsedHours: null, timePrecision: 'unknown' } : source.timeline || source.timing;
                 return { id: source.id.replace(/^l0:/, ''), text: source.text, textRevision: source.id,
                     order: source.index, orderKnown: true, timeline: info ? { ...info, textRevision: source.id,
                         locations: extraEvents.filter(event => event.source === source.id) } : undefined };
@@ -98,7 +107,8 @@ export function snapshotHistory(snapshot, context, local, atlas, resolver, saved
         } else blocked = 'места новых L0 добавлены; расчёт новой даты недоступен, показана дата импортированного среза';
     }
     return { ...local, sources: [], evidence: [], calendar, imported: true, importChanged: changed, importBlocked: blocked,
-        importExtended: fresh.length, importBoundaryMissing: boundary === null, importAttachment: attachment,
+        importExtended: fresh.length, importOverlapCount: overlapping.length, importContextReady: Boolean(local.calendar?.imported),
+        importBoundaryMissing: boundary === null, importAttachment: attachment,
         importEvents: [...oldEvents, ...extraEvents],
         coverage: snapshot.coverage, through: snapshot.coverage.throughMessage - 1,
         localThrough: fresh.length ? Math.max(...fresh.map(source => source.through)) : null,

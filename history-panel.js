@@ -83,6 +83,7 @@ export function showHistoryPanel(view, controls) {
                 ? ` Продолжение — после локального сообщения ${history.importAttachment.messageCount} на момент импорта; исходные сообщения не совпали.`
                 : ' Граница найдена в сообщениях открытого чата.';
             estimate.textContent = `${imported.events.length} событий · на карте ${mapped}, без точки ${unknown}. Источник: срез ${imported.coverage.throughMessage}/${imported.coverage.messageCount}, хвост ${imported.coverage.tailMessages} не учтён.${attached}${history.importBlocked ? ` Внимание: ${history.importBlocked}.` : ''}`;
+            if (globalThis.WorldMemory && !history.importContextReady) estimate.textContent += ' Для подготовки следующего L0 от импортированной даты обновите WorldMemory до 0.5.30.';
             update.textContent = 'Обновить по новым L0 · без API'; update.disabled = controls.busy();
             undo.textContent = 'Отменить импорт'; resume.textContent = 'Использовать местные L0'; resume.hidden = false;
             actions.append(undo);
@@ -106,7 +107,7 @@ export function showHistoryPanel(view, controls) {
         for (const event of events) {
             const item = el('li'); const title = event.placeName || event.placeId;
             const clock = datedRows.find(row => row.source === event.source && row.offset === event.offset)?.clock;
-            const details = el('details'); details.append(el('summary', `${title}${event.status === 'departed' ? ' · отбытие' : ''} · ${clock ? formatClock(clock) : event.date?.text || 'дата неизвестна'}`));
+            const details = el('details'); details.append(el('summary', `${title}${event.status === 'departed' ? ' · отбытие' : ''}${event.boundaryUncertain ? ' · сторона границы не подтверждена' : ''} · ${clock ? formatClock(clock) : event.date?.text || 'дата неизвестна'}`));
             details.append(el('blockquote', event.quote), el('small', `Источник ${event.source} · ревизия ${event.revision}`));
             item.append(details); list.append(item);
         }
