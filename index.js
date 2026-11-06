@@ -236,6 +236,10 @@ async function openAtlas() {
     })();
     try { await pendingOpen; } finally { pendingOpen = null; }
 }
+async function openRouteImport() {
+    await openAtlas();
+    view?.showRouteImport();
+}
 
 jQuery(async () => {
     const button = document.createElement('button');
@@ -245,14 +249,22 @@ jQuery(async () => {
     button.innerHTML = '<i class="fa-solid fa-globe" aria-hidden="true"></i><span>Атлас миров</span>';
     button.addEventListener('click', openAtlas);
     document.querySelector('#extensionsMenu')?.append(button);
+    const importButton = document.createElement('button');
+    importButton.id = 'world_atlas_import';
+    importButton.className = button.className;
+    importButton.type = 'button';
+    importButton.innerHTML = '<i class="fa-solid fa-file-import" aria-hidden="true"></i><span>World Atlas: импорт маршрута / JSON</span>';
+    importButton.addEventListener('click', openRouteImport);
+    document.querySelector('#extensionsMenu')?.append(importButton);
     const panel = document.createElement('div');
     panel.className = 'world-atlas-settings';
-    panel.innerHTML = '<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>World Atlas · 0.4.2</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content"><p>30 карточек доступны сразу. Координаты и гиперлинии загружаются отдельно кнопкой «Карта из источника». Короткий файл переносит «Импорт маршрута и календаря» в открытый чат; подключение и источники — «Обновить маршрут».</p><button type="button" class="menu_button">Открыть атлас</button></div></div>';
+    panel.innerHTML = '<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>World Atlas · 0.4.3</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content"><p>30 карточек доступны сразу. Координаты и гиперлинии — «Карта из источника». Для короткого файла маршрута откройте нужный чат и нажмите кнопку ниже: можно выбрать любой файл или вставить JSON текстом.</p><button type="button" class="menu_button">Открыть атлас</button><button type="button" class="menu_button world-atlas-import">Импорт маршрута и календаря · файл / JSON</button></div></div>';
     panel.querySelector('button').addEventListener('click', openAtlas);
+    panel.querySelector('.world-atlas-import').addEventListener('click', openRouteImport);
     document.querySelector('#extensions_settings')?.append(panel);
     const ctx = context();
     ctx.eventSource.on(ctx.eventTypes.CHAT_CHANGED, () => {
-        requestController?.abort(); view?.root?.querySelector('.wa-history-panel')?.remove(); view?.contextChanged();
+        requestController?.abort(); view?.root?.querySelector('.wa-history-panel')?.remove(); view?.importPanel?.remove(); view?.contextChanged();
         void syncHistory().catch(error => console.warn('[World Atlas]', error.message));
     });
     let timer;

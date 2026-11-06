@@ -84,3 +84,10 @@
 .wa-history-events small{display:block;overflow-wrap:anywhere;color:var(--wa-muted)}
 .wa-calendar table{width:100%;border-collapse:collapse;font-size:13px;text-align:left}
 .wa-calendar td,.wa-calendar th{border-bottom:1px solid #d7e3f222;padding:9px 5px;overflow-wrap:anywhere;vertical-align:top}
+.wa-import-panel{position:absolute;z-index:1300;inset:10px;max-width:560px;margin:auto;background:#121822;border:1px solid #d7e3f240;border-radius:20px;padding:16px;overflow:auto;pointer-events:auto;color:var(--wa-text);font:14px/1.5 system-ui;box-shadow:0 10px 80px #000b}
+.wa-import-panel p{font-size:13px;color:var(--wa-muted);overflow-wrap:anywhere}
+.wa-import-panel label{display:block;margin:14px 0;font-weight:600}
+.world-atlas input.wa-route-file-input{display:block;width:100%;box-sizing:border-box;margin-top:8px;font:14px system-ui;color:var(--wa-text)}
+.wa-route-file-input::file-selector-button{padding:10px;border:1px solid #d7e3f240;border-radius:8px;background:#28374b;color:#fff;cursor:pointer;margin-right:8px}
+.wa-route-json{display:block;box-sizing:border-box;width:100%;min-height:170px;max-height:40vh;margin-top:8px;padding:10px;resize:vertical;border:1px solid #d7e3f240;border-radius:8px;background:#0c111a;color:#e8edf5;font:13px/1.4 monospace}
+.wa-import-panel .wa-import-status{color:#ffd58c}

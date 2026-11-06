@@ -164,19 +164,19 @@ export class AtlasView {
         this.editButton = this.button('Редактировать декоративную линию', 'Линия пути', () => this.toggleEdit(), 'wa-route-button');
         this.undoButton = this.button('Убрать последнюю точку линии', '↶', () => this.updateRoute(this.route().slice(0, -1)));
         this.clearButton = this.button('Очистить линию', 'Очистить', () => this.updateRoute([]), 'wa-text-button');
-        this.importButton = this.button('Импортировать atlas JSON', '⋯', () => this.fileInput.click());
+        this.importButton = this.button('Импортировать atlas JSON: заменить карту', 'Карта JSON', () => this.fileInput.click(), 'wa-text-button');
         this.toolbar.append(this.editButton, this.undoButton, this.clearButton, this.importButton);
         if (this.onRouteImport) {
-            this.routeFileInput = el('input'); this.routeFileInput.type = 'file'; this.routeFileInput.hidden = true;
+            this.routeFileInput = el('input', 'wa-route-file-input'); this.routeFileInput.type = 'file';
+            this.routeFileInput.setAttribute('aria-label', 'Выбрать файл маршрута любого типа');
             // No accept/capture filter: Android must show Telegram/Downloads files.
             this.routeFileInput.addEventListener('change', async () => {
                 const file = this.routeFileInput.files?.[0]; this.routeFileInput.value = '';
                 if (!file) return;
-                try { await this.onRouteImport(file); }
-                catch (error) { this.message.textContent = `Импорт маршрута: ${error.message}`; }
+                await this.submitRouteImport(file);
             });
-            this.routeImportButton = this.button('Импорт маршрута и календаря в открытый чат', 'Импорт маршрута и календаря', () => this.routeFileInput.click(), 'wa-text-button');
-            this.toolbar.append(this.routeImportButton);
+            this.routeImportButton = this.button('Импорт маршрута и календаря в открытый чат', 'Импорт маршрута и календаря', () => this.showRouteImport(), 'wa-text-button');
+            this.toolbar.prepend(this.routeImportButton);
         }
         this.sourceButton = this.button('Отдельно загрузить справочный геослой iSkore / CARTO с raw.githubusercontent.com; права картографии не подтверждены', 'Карта из источника', () => this.loadReference(), 'wa-text-button');
         this.sourceButton.hidden = !this.atlas.schematic;
@@ -191,20 +191,59 @@ export class AtlasView {
         this.fileInput = el('input');
         this.fileInput.hidden = true;
         this.fileInput.type = 'file';
-        this.fileInput.accept = 'application/json,.json';
         this.fileInput.addEventListener('change', () => this.importFile());
         this.root.append(this.mapNode, header, this.tools, this.bottom, this.fileInput);
-        if (this.routeFileInput) this.root.append(this.routeFileInput);
         this.root.addEventListener('keydown', event => {
             if (event.key === 'Escape') this.close();
             if (event.key === 'Tab') {
-                const nodes = [...this.root.querySelectorAll('button,input,a[href]')].filter(node => !node.hidden && node.getClientRects().length && !node.disabled);
+                const nodes = [...this.root.querySelectorAll('button,input,textarea,a[href]')].filter(node => !node.hidden && node.getClientRects().length && !node.disabled);
                 const first = nodes[0], last = nodes.at(-1);
                 if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
                 if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
             }
         });
         document.body.append(this.root);
+    }
+    showRouteImport() {
+        if (!this.onRouteImport) return;
+        this.root.querySelector('.wa-history-panel')?.remove();
+        this.importPanel?.remove();
+        const panel = this.importPanel = el('section', 'wa-import-panel');
+        panel.setAttribute('aria-label', 'Импорт маршрута и календаря');
+        const heading = el('div', 'wa-history-heading');
+        const close = () => { panel.remove(); this.routeImportButton.focus({ preventScroll: true }); };
+        heading.append(el('h2', '', 'Импорт в открытый чат'), this.button('Закрыть импорт маршрута', '×', close));
+        panel.append(heading, el('p', '', 'Короткий файл WorldAtlas: маршрут и календарь. Сообщения, карточка и WI не заменяются. После импорта доступна отмена.'));
+        const fileLabel = el('label', '', 'Выберите файл любого типа');
+        fileLabel.append(this.routeFileInput);
+        const pasteLabel = el('label', '', 'Или вставьте JSON текстом');
+        const text = this.importText = el('textarea', 'wa-route-json');
+        text.setAttribute('aria-label', 'JSON маршрута и календаря');
+        text.placeholder = 'Откройте короткий JSON как текст, скопируйте всё содержимое и вставьте сюда.';
+        text.spellcheck = false;
+        pasteLabel.append(text);
+        this.importStatus = el('p', 'wa-import-status');
+        this.importStatus.setAttribute('role', 'alert');
+        const submit = this.button('Импортировать вставленный JSON', 'Импортировать JSON', () => this.submitRouteImport(new File([text.value], 'pasted-route.json', { type: 'application/json' })), 'wa-text-button');
+        panel.append(fileLabel, el('p', '', 'Если Android показывает только фото, используйте вставку JSON ниже. Разрешение на буфер обмена не требуется.'), pasteLabel, submit, this.importStatus);
+        panel.addEventListener('keydown', event => { if (event.key === 'Escape') { event.stopPropagation(); close(); } });
+        this.root.append(panel);
+        if (!this.canEdit()) this.importStatus.textContent = 'Сначала откройте нужный чат в SillyTavern.';
+        heading.querySelector('button').focus({ preventScroll: true });
+    }
+    async submitRouteImport(file) {
+        if (this.importBusy) return;
+        this.importBusy = true;
+        const panel = this.importPanel, status = this.importStatus;
+        if (status) status.textContent = 'Проверка JSON…';
+        try {
+            await this.onRouteImport(file);
+            panel?.remove();
+        } catch (error) {
+            const message = `Импорт маршрута: ${error.message}`;
+            if (status) status.textContent = message;
+            else this.message.textContent = message;
+        } finally { this.importBusy = false; }
     }
     coords(point) { return [this.atlas.height - point.y, point.x]; }
     async prepareColors() {
