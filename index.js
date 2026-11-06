@@ -120,7 +120,7 @@ async function syncHistory() {
             if (!state.manual && JSON.stringify(next) !== JSON.stringify(route())) {
                 context().chatMetadata[OWNER].routes[view.atlas.id] = next; await context().saveMetadata();
             }
-            view.drawRoute(); return;
+            view.drawRoute(); view.root.querySelector('.wa-history-panel')?.dispatchEvent(new Event('worldatlas:history-changed')); return;
         }
         const events = liveEvents(state.events, current, view.atlas);
         const changed = JSON.stringify(events) !== JSON.stringify(state.events);
@@ -133,6 +133,7 @@ async function syncHistory() {
             await context().saveMetadata();
         }
         view.drawRoute();
+        view.root.querySelector('.wa-history-panel')?.dispatchEvent(new Event('worldatlas:history-changed'));
     })();
     try { await syncing; } finally { syncing = null; }
 }
@@ -250,7 +251,8 @@ jQuery(async () => {
         void syncHistory().catch(error => console.warn('[World Atlas]', error.message));
     });
     let timer;
-    ctx.eventSource.on('worldmemory:injection-refresh', () => {
+    for (const event of ['worldmemory:injection-refresh', 'worldmemory:archive-changed']) ctx.eventSource.on(event, info => {
+        if (info?.metadata && info.metadata !== context().chatMetadata) return;
         clearTimeout(timer); timer = setTimeout(() => void syncHistory().catch(error => console.warn('[World Atlas]', error.message)), 250);
     });
     for (const event of ['MESSAGE_RECEIVED', 'MESSAGE_SENT', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'CHARACTER_MESSAGE_RENDERED', 'GENERATION_ENDED']) {

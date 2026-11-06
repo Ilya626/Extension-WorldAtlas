@@ -137,6 +137,7 @@ export function showHistoryPanel(view, controls) {
         }
         calendar.append(el('p', formatClock(calendarNow(history, start)), 'wa-history-status'), calendarSettings, table);
     }
+    panel.addEventListener('worldatlas:history-changed', render);
     view.root.append(panel); render(); close.focus({ preventScroll: true });
     return panel;
 }
