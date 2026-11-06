@@ -1,4 +1,6 @@
 @import url('./vendor/leaflet/leaflet.css');
+#extensionsMenu #world_atlas_open,#extensionsMenu #world_atlas_import{background:transparent;color:inherit;border:0;width:100%;text-align:left;font:inherit}
+#extensionsMenu #world_atlas_import span{flex:1;min-width:0;white-space:normal}
 .world-atlas { --wa-bg:#070a12;--wa-panel:#121822;--wa-text:#f4efe7;--wa-muted:#b4bcc8;--wa-line:#ef5b5b;position:fixed;inset:0;z-index:100000;isolation:isolate;background:var(--wa-bg);color:var(--wa-text);font:15px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:left;overflow:hidden;height:100vh;height:100dvh; }
 .world-atlas[hidden],.world-atlas [hidden]{display:none!important}
 .world-atlas * {box-sizing:border-box}
