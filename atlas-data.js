@@ -6,6 +6,32 @@ async function readLocalJson(path, base) {
     return response.json();
 }
 
+const fold = value => String(value).normalize('NFKC').toLocaleLowerCase('ru').replaceAll('ё', 'е').trim();
+function sourcePlace(atlas, point) {
+    return { ...point, sourcePlace: true, sourcePointId: point.id, aliases: point.aliases || [],
+        shortText: 'Точка загруженного справочного геослоя. Развёрнутая карточка мира пока не добавлена.',
+        image: atlas.defaultPlaceImage || 'assets/landscape-card.svg', imageColor: '#b4bcc8',
+        mapNote: atlas.coordinateNote || 'Координаты и гиперлинии из загруженной карты; доступность маршрута в эпоху игры не подтверждена.' };
+}
+// Search the whole loaded source, while only selected source worlds become pins.
+export function searchAtlasPlaces(atlas, query) {
+    const ids = new Set(atlas.places.map(place => place.sourcePointId).filter(Boolean));
+    const candidates = [...atlas.places];
+    for (const point of atlas.context?.points || []) {
+        if (ids.has(point.id) || !String(point.name || '').trim()) continue;
+        candidates.push(sourcePlace(atlas, point));
+        ids.add(point.id);
+    }
+    const needle = fold(query);
+    return candidates.filter(place => [place.name, ...(place.aliases || [])].some(name => fold(name).includes(needle)));
+}
+export function activateSourcePlace(atlas, id) {
+    const point = atlas.context?.points?.find(point => point.id === id);
+    if (!point || atlas.places.some(place => place.id === id || place.sourcePointId === id)) return atlas;
+    return { ...atlas, activeSourcePointIds: [...new Set([...(atlas.activeSourcePointIds || []), id])],
+        places: [...atlas.places, sourcePlace(atlas, point)] };
+}
+
 // Data references keep the reader independent of any particular fictional world.
 export async function loadAtlas(input, base) {
     const atlas = structuredClone(input);
@@ -29,7 +55,8 @@ export async function loadAtlas(input, base) {
             image: place.image || atlas.imageKinds?.[place.imageKind] || atlas.defaultPlaceImage,
         };
     });
-    return atlas;
+    // cardsFile reloads the shipped catalogue; restore selected source worlds after it.
+    return (atlas.activeSourcePointIds || []).reduce(activateSourcePlace, atlas);
 }
 
 export async function loadReferenceAtlas(base) {

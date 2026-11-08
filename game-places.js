@@ -23,7 +23,8 @@ export function readGamePlaces(input = []) {
 const fold = value => String(value).normalize('NFKC').toLowerCase().replaceAll('ё', 'е').trim();
 export function withGamePlaces(atlas, places = []) {
     if (!places.length) return atlas;
-    const candidates = [...atlas.places.filter(place => !place.gamePlace), ...(atlas.context?.points || [])];
+    // Activating a source pin must not change which same-named landmark anchors a game world.
+    const candidates = [...atlas.places.filter(place => !place.gamePlace && !place.sourcePlace), ...(atlas.context?.points || [])];
     const extra = places.map((place, index) => {
         const anchor = place.anchorNames.map(name => candidates.find(candidate =>
             [candidate.id, candidate.name, ...(candidate.aliases || [])].some(alias => fold(alias) === fold(name)))).find(Boolean);

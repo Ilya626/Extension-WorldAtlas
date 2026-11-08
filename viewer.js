@@ -1,5 +1,5 @@
-import { loadAtlas, loadReferenceAtlas } from './atlas-data.js';
-import { createRouteNetwork, historyRed } from './route-network.js';
+import { loadAtlas, loadReferenceAtlas, searchAtlasPlaces, activateSourcePlace } from './atlas-data.js';
+import { createRouteNetwork, historyRed, sourcePathsAt } from './route-network.js';
 import { withGamePlaces } from './game-places.js';
 import { showTravel } from './travel-view.js';
 
@@ -62,7 +62,7 @@ function assetUrl(value, base) {
     return url.href;
 }
 export function validateAtlas(atlas) {
-    if (!atlas || typeof atlas.id !== 'string' || !atlas.id.trim() || typeof atlas.title !== 'string' || !Array.isArray(atlas.places) || !atlas.places.length || atlas.places.length > 2000) throw new Error('Нужен atlas JSON с id, title и places (1–2000).');
+    if (!atlas || typeof atlas.id !== 'string' || !atlas.id.trim() || typeof atlas.title !== 'string' || !Array.isArray(atlas.places) || !atlas.places.length || atlas.places.length > 10000) throw new Error('Нужен atlas JSON с id, title и places (1–10000).');
     if (!(atlas.width > 0 && atlas.width <= 10000 && atlas.height > 0 && atlas.height <= 10000)) throw new Error('Укажите width/height от 1 до 10000.');
     const ids = new Set();
     for (const place of atlas.places) {
@@ -316,6 +316,7 @@ export class AtlasView {
         this.map.on('zoomend', () => this.mapNode.classList.toggle('wa-distant', this.map.getZoom() < -1.6));
         this.map.on('moveend', () => this.positionLabels());
         this.drawRoute();
+        this.highlightSourcePaths(this.atlas.places.find(place => place.id === this.selected));
     }
     renderReference() {
         const { L } = this;
@@ -323,8 +324,10 @@ export class AtlasView {
         if (!context) return;
         this.map.createPane('wa-reference').style.zIndex = '250';
         const renderer = L.canvas({ pane: 'wa-reference', padding: .2 });
+        this.referenceRenderer = renderer;
         const foreground = new Set(this.atlas.places.map(place => place.sourcePointId).filter(Boolean));
         this.referenceLayer = L.layerGroup().addTo(this.map);
+        this.sourceSelectionLayer = L.layerGroup().addTo(this.map);
         for (const path of context.paths ?? []) {
             L.polyline(path.points.map(([x, y]) => this.coords({ x, y })), {
                 renderer, interactive: false, color: path.tier === 1 ? '#8cb5bf' : '#7799a6',
@@ -336,6 +339,16 @@ export class AtlasView {
             if (foreground.has(point.id)) continue;
             L.circleMarker(this.coords(point), { renderer, interactive: false, radius: 1.15,
                 stroke: false, fillColor: '#b0c0ce', fillOpacity: .35 }).addTo(this.referenceLayer);
+        }
+    }
+    highlightSourcePaths(place) {
+        this.sourceSelectionLayer?.clearLayers();
+        if (!place?.sourcePlace || !this.sourceSelectionLayer) return;
+        for (const path of sourcePathsAt(this.atlas.context?.paths, place)) {
+            this.L.polyline(path.points.map(([x, y]) => this.coords({ x, y })), {
+                renderer: this.referenceRenderer, interactive: false, color: '#9fd7df',
+                opacity: .85, weight: 2, smoothFactor: .65,
+            }).addTo(this.sourceSelectionLayer);
         }
     }
     fit() {
@@ -368,7 +381,17 @@ export class AtlasView {
         }
     }
     select(place, center = false) {
+        if (place.sourcePlace && !this.baseAtlas.places.some(active => active.id === place.id)) {
+            this.baseAtlas = activateSourcePlace(this.baseAtlas, place.sourcePointId);
+            this.atlas = withGamePlaces(this.baseAtlas, this.gamePlaces);
+            const position = this.map.getCenter(), zoom = this.map.getZoom();
+            this.renderMap(); this.map.setView(position, zoom, { animate: false });
+            // This saves map pins only: no history sync, route or calendar mutation.
+            this.onActivate?.(this.baseAtlas);
+            place = this.atlas.places.find(active => active.id === place.id);
+        }
         this.selected = place.id;
+        this.highlightSourcePaths(place);
         for (const [id, marker] of this.markers) marker.getElement()?.classList.toggle('wa-selected', id === place.id);
         this.search.value = '';
         this.results.hidden = true;
@@ -428,12 +451,22 @@ export class AtlasView {
         const query = fold(this.search.value);
         this.results.replaceChildren();
         if (!query && document.activeElement !== this.search) { this.results.hidden = true; return; }
-        const matches = this.atlas.places.filter(place => [place.name, ...(place.aliases ?? [])].some(name => fold(name).includes(query))).slice(0, query ? 8 : 100);
-        for (const place of matches) {
-            const button = this.button(`Открыть ${place.name}`, place.name, () => { this.search.blur(); this.select(place, true); }, 'wa-search-result');
-            button.append(el('span', '', (place.aliases ?? []).find(name => /[a-z]/i.test(name)) || place.region || ''));
-            this.results.append(button);
-        }
+        const matches = searchAtlasPlaces(this.atlas, query);
+        let shown = 0;
+        const more = this.button('Показать следующие результаты поиска', 'Показать ещё', () => appendBatch(), 'wa-search-more');
+        const count = el('p', 'wa-search-count');
+        const appendBatch = () => {
+            more.remove();
+            for (const place of matches.slice(shown, shown + 50)) {
+                const button = this.button(`Открыть ${place.name}`, place.name, () => { this.search.blur(); this.select(place, true); }, 'wa-search-result');
+                button.append(el('span', '', [(place.aliases ?? []).find(name => /[a-z]/i.test(name)), place.region, place.grid].filter(Boolean).join(' · ')));
+                this.results.append(button);
+            }
+            shown = Math.min(matches.length, shown + 50);
+            count.textContent = `Найдено: ${matches.length} · показано: ${shown}`;
+            if (shown < matches.length) this.results.append(more);
+        };
+        if (matches.length) { this.results.append(count); appendBatch(); }
         if (!matches.length) this.results.append(el('p', '', 'Пока нет такой точки.'));
         this.results.hidden = false;
     }

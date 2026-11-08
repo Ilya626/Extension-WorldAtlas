@@ -1,4 +1,13 @@
 // Connect stops using existing line geometry only. No travel time or world simulation.
+export function sourcePathsAt(paths, place, snapDistance = 1) {
+    return (paths || []).filter(path => path.points.some((b, i, points) => {
+        if (!i) return false;
+        const a = points[i - 1], dx = b[0] - a[0], dy = b[1] - a[1];
+        const t = Math.max(0, Math.min(1, ((place.x - a[0]) * dx + (place.y - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+        return Math.hypot(place.x - a[0] - t * dx, place.y - a[1] - t * dy) <= snapDistance;
+    }));
+}
+
 export function createRouteNetwork(paths, places, snapDistance = 1) {
     const graph = new Map(), segments = [], anchors = new Map(), cache = new Map();
     const key = point => `${point[0].toFixed(2)},${point[1].toFixed(2)}`;
