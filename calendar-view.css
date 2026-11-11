@@ -56,3 +56,6 @@
 @media(min-width:700px){.wa-calendar-panel{left:auto;right:18px;bottom:18px;border-bottom:1px solid #d7e3f230;border-radius:24px;width:430px;max-height:calc(100dvh - 36px);margin:0}.wa-cal-body{padding-bottom:18px}}
 @media(max-height:650px){.wa-calendar-panel{max-height:94dvh}.wa-cal-heading{padding-top:4px;padding-bottom:6px}.wa-cal-body{padding-top:0}}
 @media(prefers-reduced-motion:reduce){.wa-calendar-panel *{scroll-behavior:auto!important}}
+.wa-cal-model { display: flex; gap: 8px; flex-wrap: wrap; }
+.wa-cal-clarify { flex: 1 1 230px; min-height: 42px; }
+.wa-cal-model .wa-cal-stop { min-height: 42px; }

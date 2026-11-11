@@ -34,7 +34,7 @@ function segments() {
 const swSegments = segments();
 
 // Date placement follows timeline-calendar.js's declared Legends 368-day profile.
-// This view never changes the anchor, source dates, elapsed time, or route state.
+// Day selection is read-only; explicit model clarification is delegated to WM.
 export function showCalendar(view, controls) {
     view.root.querySelector('.wa-calendar-panel')?.close?.();
     const panel = node('section', 'wa-calendar-panel');
@@ -44,6 +44,7 @@ export function showCalendar(view, controls) {
     backdrop.type = 'button'; backdrop.tabIndex = -1;
     backdrop.setAttribute('aria-label', 'Вернуться к карте');
     const close = () => {
+        if (clarifying) controls.stop?.();
         panel.remove(); backdrop.remove();
         view.calendarButton?.focus({ preventScroll: true });
     };
@@ -64,6 +65,7 @@ export function showCalendar(view, controls) {
     view.root.append(backdrop, panel);
     let selectedStart = null, selectedEnd = null, rangeMode = false, rangePending = false;
     let unknownOnly = false, page = null;
+    let clarifying = false, clarification = '';
 
     function render() {
         const rows = controls.rows() || [], anchor = controls.anchor?.() || {};
@@ -90,6 +92,25 @@ export function showCalendar(view, controls) {
         };
         const focusedLabel = body.contains(document.activeElement) ? document.activeElement.getAttribute('aria-label') : null;
         body.replaceChildren();
+        if (controls.clarify) {
+            const actions = node('div', 'wa-cal-model');
+            const clarify = button(clarifying ? 'Уточняем календарь…' : 'Уточнить календарь моделью', async () => {
+                if (clarifying) return;
+                clarifying = true; clarification = 'Модель сверяет L0 и исходные сообщения. Один запрос.'; render();
+                try {
+                    const result = await controls.clarify();
+                    clarification = result?.note || 'Календарь обновлён.';
+                    selectedStart = selectedEnd = page = null;
+                } catch (error) { clarification = error.message || 'Запрос остановлен. Прежние даты сохранены.'; }
+                finally { clarifying = false; if (panel.isConnected) render(); }
+            }, 'wa-cal-clarify');
+            clarify.disabled = clarifying;
+            actions.append(clarify);
+            if (clarifying) actions.append(button('Остановить', () => controls.stop?.(), 'wa-cal-stop'));
+            body.append(actions);
+            const message = node('p', 'wa-cal-hint', clarification || 'Один запрос через подключение WorldMemory; сверка дат и маршрута по сыгранной истории.');
+            message.setAttribute('role', 'status'); body.append(message);
+        }
         const modes = node('nav', 'wa-cal-modes'); modes.setAttribute('aria-label', 'Выбор времени');
         for (const [text, value] of [['День', false], ['Период', true]]) {
             const mode = button(text, () => { rangeMode = value; rangePending = false; selectedEnd = selectedStart; unknownOnly = false; render(); });

@@ -57,6 +57,14 @@ test('a planned trip does not change player position', () => {
     assert.deepEqual(eventRoute(liveEvents([], input, atlas)), ['a']);
 });
 
+test('qualified world and local-site names retain their established map route', () => {
+    // Export 1794361340455: "World, palace" and "World, Temple terrace"
+    // were returned as unmapped places, dropping the completed return leg.
+    const input = history([turn('1', 'Ты прибыл во дворец Альфы.', 'Альфа, дворец'),
+        turn('2', 'Ты вернулся на террасу Беты.', 'Бета, терраса Храма')]);
+    assert.deepEqual(eventRoute(liveEvents([], input, atlas)), ['a', 'b']);
+});
+
 test('rollback and editing rebuild the route from current evidence', () => {
     const original = [turn('1', 'Ты прибыл на Альфу.', 'Альфа'), turn('2', 'Ты прибыл на Бету.', 'Бета')];
     const saved = liveEvents([], history(original), atlas);

@@ -225,6 +225,15 @@ function openCalendar() {
                 return { ...row, placeId: Number.isFinite(place?.x) && Number.isFinite(place?.y) ? place.id : null };
             });
         }, anchor,
+        clarify: async () => {
+            const runtime = globalThis.WorldMemory?.archive;
+            if (!runtime?.clarifyCalendar) throw new Error('Обновите WorldMemory для уточнения календаря моделью.');
+            if (modelBusy) throw new Error('Дождитесь текущего обновления маршрута.');
+            const result = await runtime.clarifyCalendar({ places: view.atlas.places });
+            await syncHistory();
+            return result;
+        },
+        stop: () => globalThis.WorldMemory?.archive?.stop(),
         onSelect: row => {
             const event = events().find(event => event.source === row.source && event.offset === row.offset);
             const place = findPlace(event?.placeId || row.place, view.atlas);
@@ -306,7 +315,7 @@ jQuery(async () => {
     document.querySelector('#extensionsMenu')?.append(importButton);
     const panel = document.createElement('div');
     panel.className = 'world-atlas-settings';
-    panel.innerHTML = '<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>World Atlas · 0.4.7</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content"><p>30 карточек доступны сразу. Координаты и гиперлинии — «Карта из источника». Для короткого файла маршрута откройте нужный чат и нажмите кнопку ниже: можно выбрать любой файл или вставить JSON текстом. Календарь открывается прямо из строки поиска карты.</p><button type="button" class="menu_button">Открыть атлас</button><button type="button" class="menu_button world-atlas-import">Импорт маршрута и календаря · файл / JSON</button></div></div>';
+    panel.innerHTML = '<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>World Atlas · 0.4.8</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content"><p>30 карточек доступны сразу. Координаты и гиперлинии — «Карта из источника». Для короткого файла маршрута откройте нужный чат и нажмите кнопку ниже: можно выбрать любой файл или вставить JSON текстом. Календарь открывается прямо из строки поиска карты.</p><button type="button" class="menu_button">Открыть атлас</button><button type="button" class="menu_button world-atlas-import">Импорт маршрута и календаря · файл / JSON</button></div></div>';
     panel.querySelector('button').addEventListener('click', openAtlas);
     panel.querySelector('.world-atlas-import').addEventListener('click', openRouteImport);
     document.querySelector('#extensions_settings')?.append(panel);

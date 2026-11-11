@@ -7,7 +7,14 @@ export const revision = value => {
 const fold = value => String(value).normalize('NFKC').toLowerCase().replaceAll('ё', 'е').trim();
 export function findPlace(value, atlas) {
     const name = fold(value);
-    return atlas.places.find(place => [place.id, place.name, ...(place.aliases || [])].some(alias => fold(alias) === name));
+    const names = place => [place.id, place.name, ...(place.aliases || [])].map(fold);
+    const exact = atlas.places.find(place => names(place).includes(name));
+    if (exact) return exact;
+    // Timeline locations can qualify an established world with a local site:
+    // "World, port". Only an explicit, unambiguous leading name is a map link.
+    const qualified = atlas.places.filter(place => names(place).some(alias => alias
+        && name.startsWith(alias) && /^\s*[,·]/u.test(name.slice(alias.length))));
+    return qualified.length === 1 ? qualified[0] : undefined;
 }
 export function dateValue(value) {
     if (!value || !['exact', 'approximate', 'relative', 'unknown'].includes(value.precision)
