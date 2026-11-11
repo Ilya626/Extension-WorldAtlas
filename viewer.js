@@ -90,6 +90,7 @@ export class AtlasView {
         }
         this.previousFocus = document.activeElement;
         this.root.hidden = false;
+        this.refreshCalendarAction();
         this.previousOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         requestAnimationFrame(() => {
@@ -111,6 +112,7 @@ export class AtlasView {
     }
     close() {
         if (this.root.hidden) return;
+        if (this.calendarUpdating) this.onStopCalendar?.();
         this.root.querySelector('.wa-travel-panel')?.close?.();
         this.editing = false;
         this.root.hidden = true;
@@ -159,7 +161,15 @@ export class AtlasView {
         this.results = el('div', 'wa-results');
         this.results.hidden = true;
         this.gamePlacesBar = el('div', 'wa-game-places');
-        header.append(titleRow, searchRow, this.gamePlacesBar, this.results);
+        this.calendarActions = el('div', 'wa-calendar-actions');
+        this.calendarUpdateButton = this.button('Обновить календарь LLM: один запрос к модели', 'Обновить календарь LLM', () => this.updateCalendar(), 'wa-calendar-update');
+        this.calendarStopButton = this.button('Остановить обновление календаря', 'Остановить', () => this.onStopCalendar?.(), 'wa-calendar-stop');
+        this.calendarActionNote = el('p', 'wa-calendar-action-note');
+        this.calendarActionNote.id = 'world-atlas-calendar-action-status';
+        this.calendarActionNote.setAttribute('role', 'status');
+        this.calendarUpdateButton.setAttribute('aria-describedby', this.calendarActionNote.id);
+        this.calendarActions.append(this.calendarUpdateButton, this.calendarStopButton, this.calendarActionNote);
+        header.append(titleRow, searchRow, this.calendarActions, this.gamePlacesBar, this.results);
         this.mapNode = el('div', 'wa-map');
         this.mapNode.setAttribute('aria-label', 'Карта: перемещайте одним пальцем, масштабируйте двумя');
         this.tools = el('nav', 'wa-tools');
@@ -214,6 +224,7 @@ export class AtlasView {
             }
         });
         document.body.append(this.root);
+        this.refreshCalendarAction();
     }
     showRouteImport() {
         if (!this.onRouteImport) return;
@@ -267,6 +278,7 @@ export class AtlasView {
         if (!this.root) return;
         const center = this.map.getCenter(), zoom = this.map.getZoom();
         this.renderMap(); this.map.setView(center, zoom, { animate: false });
+        this.refreshCalendarAction();
     }
     async prepareColors() {
         await Promise.all(this.atlas.places.map(async place => {
@@ -477,6 +489,31 @@ export class AtlasView {
         this.renderEdit();
         this.card.querySelector('.wa-add-point')?.remove();
         this.drawRoute();
+        this.calendarActionMessage = '';
+        this.refreshCalendarAction();
+    }
+    refreshCalendarAction() {
+        if (!this.calendarUpdateButton) return;
+        const reason = this.calendarAvailability?.() || (!this.onClarifyCalendar ? 'Нужен WorldMemory 0.5.35+ для обновления календаря.' : '');
+        this.calendarUpdateButton.disabled = this.calendarUpdating || Boolean(reason);
+        this.calendarUpdateButton.textContent = this.calendarUpdating ? 'Обновляем календарь…' : 'Обновить календарь LLM';
+        this.calendarStopButton.hidden = !this.calendarUpdating;
+        this.calendarActionNote.textContent = this.calendarActionMessage || reason || 'Один запрос к модели через подключение WorldMemory.';
+        const headerHeight = this.root.querySelector('.wa-header').getBoundingClientRect().height;
+        if (headerHeight) this.root.style.setProperty('--wa-header-height', `${headerHeight}px`);
+    }
+    async updateCalendar() {
+        if (this.calendarUpdating) return;
+        const reason = this.calendarAvailability?.();
+        if (reason) { this.calendarActionMessage = reason; this.refreshCalendarAction(); return; }
+        this.calendarUpdating = true;
+        this.calendarActionMessage = 'Модель сверяет даты и сыгранные перемещения.';
+        this.refreshCalendarAction();
+        try {
+            const result = await this.onClarifyCalendar();
+            this.calendarActionMessage = result?.note || 'Календарь обновлён.';
+        } catch (error) { this.calendarActionMessage = error.message || 'Запрос остановлен. Прежний календарь сохранён.'; }
+        finally { this.calendarUpdating = false; this.refreshCalendarAction(); }
     }
     toggleEdit() {
         if (!this.canEdit()) { this.message.textContent = 'Откройте чат для своей линии пути.'; return; }

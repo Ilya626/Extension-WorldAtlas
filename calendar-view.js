@@ -104,11 +104,12 @@ export function showCalendar(view, controls) {
                 } catch (error) { clarification = error.message || 'Запрос остановлен. Прежние даты сохранены.'; }
                 finally { clarifying = false; if (panel.isConnected) render(); }
             }, 'wa-cal-clarify');
-            clarify.disabled = clarifying;
+            const unavailable = controls.availability?.() || '';
+            clarify.disabled = clarifying || Boolean(unavailable);
             actions.append(clarify);
             if (clarifying) actions.append(button('Остановить', () => controls.stop?.(), 'wa-cal-stop'));
             body.append(actions);
-            const message = node('p', 'wa-cal-hint', clarification || 'Один запрос через подключение WorldMemory; сверка дат и маршрута по сыгранной истории.');
+            const message = node('p', 'wa-cal-hint', clarification || unavailable || 'Один запрос через подключение WorldMemory; сверка дат и маршрута по сыгранной истории.');
             message.setAttribute('role', 'status'); body.append(message);
         }
         const modes = node('nav', 'wa-cal-modes'); modes.setAttribute('aria-label', 'Выбор времени');
