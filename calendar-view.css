@@ -59,3 +59,46 @@
 .wa-cal-model { display: flex; gap: 8px; flex-wrap: wrap; }
 .wa-cal-clarify { flex: 1 1 230px; min-height: 42px; }
 .wa-cal-model .wa-cal-stop { min-height: 42px; }
+.world-atlas .wa-cal-event{display:block;padding:0;overflow:hidden}
+.world-atlas .wa-cal-event-main{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:94px;border:0;padding:12px;background:none;color:inherit;font:inherit;text-align:left;text-shadow:none;box-shadow:none;margin:0;border-radius:12px}
+.wa-cal-event-main:focus-visible{outline:2px solid #f4c277;outline-offset:-3px}
+.wa-cal-place-status{font-size:11px;color:#b4bdcb}
+.world-atlas .wa-cal-unmapped{border-color:#ce8d943b;background:#c46c7808}
+.wa-cal-unmapped .wa-cal-event-action{color:#e0a1aa}
+.wa-calendar-panel .wa-cal-change{display:flex;margin:0 6px 3px auto;background:none;border:0;color:#b7c9de;font-size:12px;min-height:44px}
+.wa-cal-notice{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:none;border-top:1px solid #d7e3f228;padding:8px 15px;background:#192230;font-size:12px}
+.wa-cal-notice span{overflow-wrap:anywhere;min-width:0}
+.wa-cal-notice .wa-cal-button{flex:none;background:none;border:0;color:#edb6bb;font-size:12px}
+.wa-place-overlay{position:absolute;z-index:1400;inset:0;display:flex;align-items:flex-end;justify-content:center;background:#05091066;backdrop-filter:blur(3px);color:#f4efe7;font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;text-align:left;pointer-events:auto}
+.wa-place-overlay *{box-sizing:border-box}
+.wa-place-sheet{width:100%;max-width:520px;max-height:92dvh;display:flex;flex-direction:column;overflow:hidden;border:1px solid #d7e3f238;border-bottom:0;border-radius:24px 24px 0 0;background:#121822;box-shadow:0 -16px 70px #0008}
+.wa-place-header{padding:4px 17px 10px;flex:none}
+.wa-place-title{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.wa-place-title h2{font:550 23px/1.2 system-ui;margin:5px 0;color:inherit;text-shadow:none}
+.world-atlas .wa-place-button{font:inherit;text-shadow:none;box-shadow:none;min-height:44px;border:0;border-radius:12px;padding:8px 12px;background:#ffffff08;color:#c6d2e1;cursor:pointer;touch-action:manipulation;margin:0}
+.wa-place-button:disabled{opacity:.45;cursor:default}
+.wa-place-overlay button:focus-visible,.wa-place-overlay input:focus-visible{outline:2px solid #e3a6ae;outline-offset:2px}
+.wa-place-context{font-size:12px;color:#becbda;margin:5px 0;overflow-wrap:anywhere}
+.wa-place-context strong{color:#e1dce2;font-weight:550}
+.wa-place-context small{display:block;font-size:11px;color:#9dafc3;margin-top:4px}
+.wa-place-search-label{display:block;color:#b5c3d3;font-size:11px;margin:15px 0 6px}
+.world-atlas .wa-place-search{display:block;width:100%;min-height:46px;border:1px solid #d7e3f234;border-radius:12px;background:#090f19;color:#f0f3f7;padding:10px 12px;font:14px system-ui;margin:6px 0 0;box-shadow:none}
+.wa-place-options{overflow:auto;overscroll-behavior:contain;padding:0 16px 10px;min-height:70px}
+.wa-place-group{font:500 11px/1.4 system-ui;color:#a5b6ca;margin:15px 0 7px}
+.wa-place-option{display:flex;align-items:center;gap:11px;min-height:72px;padding:11px 12px;border:1px solid #d7e3f21a;border-radius:13px;margin:7px 0;cursor:pointer;background:#ffffff03}
+.wa-place-option:has(input:checked){border-color:#e7a3a6;background:#ef5b5b10}
+.world-atlas .wa-place-option input{appearance:none;flex:none;width:19px;height:19px;margin:0;border:1px solid #8c9db3;border-radius:50%;display:grid;place-items:center;padding:0;box-shadow:none;background:none}
+.wa-place-option input:checked{border-color:#ee9297}
+.wa-place-option input:checked:before{content:'';width:9px;height:9px;background:#f5b0b3;border-radius:50%}
+.wa-place-option-text{display:grid;gap:3px;min-width:0}
+.wa-place-option-text strong{font-size:14px;font-weight:550;overflow-wrap:anywhere}
+.wa-place-option-text span{font-size:12px;color:#b0c0d2;overflow-wrap:anywhere}
+.wa-place-option-text small{font-size:10px;color:#859ab1;overflow-wrap:anywhere}
+.wa-place-footer{padding:12px 16px calc(16px + env(safe-area-inset-bottom));border-top:1px solid #d7e3f222;background:#151d29;flex:none}
+.wa-place-help{min-height:34px;margin:0 0 10px;color:#acbdcf;font-size:11px;line-height:1.5;overflow-wrap:anywhere}
+.world-atlas .wa-place-primary{min-height:48px;width:100%;background:#b96571;color:#fff0f1;font-weight:550}
+.world-atlas .wa-place-remove{display:block;margin:5px auto 0;background:none;color:#c7a0a8;font-size:12px}
+.world-atlas .wa-place-more{width:100%;font-size:12px}
+.wa-place-empty{font-size:12px;color:#acbdcf;padding:18px 0}
+@media(min-width:700px){.wa-place-overlay{justify-content:flex-end;padding-right:18px;padding-bottom:18px}.wa-place-sheet{width:430px;border-bottom:1px solid #d7e3f238;border-radius:24px;max-height:calc(100dvh - 36px)}}
+@media(max-height:650px){.wa-place-context{max-height:70px;overflow:auto}.wa-place-search-label{margin-top:6px}.wa-place-footer{padding-top:8px;padding-bottom:8px}.wa-place-help{min-height:0}}

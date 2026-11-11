@@ -1,3 +1,5 @@
+import { showPlacePicker } from './place-picker.js';
+
 const node = (tag, className, text) => {
     const result = document.createElement(tag);
     if (className) result.className = className;
@@ -45,6 +47,7 @@ export function showCalendar(view, controls) {
     backdrop.setAttribute('aria-label', 'Вернуться к карте');
     const close = () => {
         if (clarifying) controls.stop?.();
+        panel.picker?.close();
         panel.remove(); backdrop.remove();
         view.calendarButton?.focus({ preventScroll: true });
     };
@@ -66,8 +69,15 @@ export function showCalendar(view, controls) {
     let selectedStart = null, selectedEnd = null, rangeMode = false, rangePending = false;
     let unknownOnly = false, page = null;
     let clarifying = false, clarification = '';
+    let notice = '', undoAction = null, undoBusy = false;
+
+    function bindingSaved(message, undo, key) {
+        notice = message; undoAction = undo; render();
+        [...body.querySelectorAll('[data-binding-key]')].find(item => item.dataset.bindingKey === key)?.querySelector('button')?.focus({ preventScroll: true });
+    }
 
     function render() {
+        const scrollTop = body.scrollTop;
         const rows = controls.rows() || [], anchor = controls.anchor?.() || {};
         const known = rows.filter(row => gameDay(row) !== null), unknown = rows.filter(row => gameDay(row) === null);
         const lastDay = known.length ? Math.max(...known.map(gameDay)) : 1;
@@ -182,20 +192,29 @@ export function showCalendar(view, controls) {
         else if (filtered.some(row => row.clock?.approximate) || anchor.approximate) selection.append(node('p', 'wa-cal-hint', '≈ Даты приблизительные: календарная опора или длительность событий не точны.'));
         if (!filtered.length) selection.append(node('p', 'wa-cal-empty', rows.length ? 'В выбранном времени нет сохранённых событий.' : 'Сохранённых событий пока нет. Календарь появится вместе с хронологией игры.'));
         for (const row of filtered) {
-            const canLocate = Boolean(row.placeId && controls.onSelect);
-            const card = node(canLocate ? 'button' : 'article', `wa-cal-event${canLocate ? ' wa-cal-locatable' : ''}`);
-            if (canLocate) {
-                card.type = 'button'; card.addEventListener('click', () => { close(); controls.onSelect(row); });
+            const canLocate = Boolean(row.placeId && row.hasCoordinates !== false && controls.onSelect);
+            const canBind = Boolean(row.bindingKey && controls.bind && controls.places);
+            const card = node('article', `wa-cal-event${!row.placeId ? ' wa-cal-unmapped' : ''}`);
+            if (row.bindingKey) card.dataset.bindingKey = row.bindingKey;
+            const main = node(canLocate || canBind ? 'button' : 'div', `wa-cal-event-main${canLocate || canBind ? ' wa-cal-locatable' : ''}`);
+            if (canLocate || canBind) {
+                main.type = 'button';
+                main.addEventListener('click', () => canLocate ? (close(), controls.onSelect(row))
+                    : showPlacePicker(panel, row, controls, bindingSaved, main));
             }
             const text = node('div', 'wa-cal-event-text');
-            text.append(node('strong', '', row.place || row.placeName || 'Место не установлено'));
+            text.append(node('strong', '', row.place || row.placeName || 'Место не указано'));
+            text.append(node('span', 'wa-cal-place-status', row.manualPlace ? `Связано: ${row.boundPlaceName} · вручную`
+                : row.placeId ? canLocate ? 'Планета определена' : 'Место известно · без координат' : 'Планета не определена'));
             const clock = row.clock;
             const fallback = clock ? `${clock.incomplete ? 'Не ранее: ' : clock.approximate ? '≈ ' : ''}День ${gameDay(row) ?? 'не установлен'}` : 'День не установлен';
             text.append(node('span', 'wa-cal-event-time', clock?.label || (clock ? fallback : row.date?.text || fallback)));
             if (row.status === 'departed') text.append(node('span', 'wa-cal-event-status', 'Отбытие'));
             if (row.date?.text && row.date.text !== clock?.label) text.append(node('small', '', row.date.text));
             text.append(node('small', 'wa-cal-source', row.source ? `Источник: ${row.source}${row.offset !== undefined ? ` · событие ${row.offset + 1}` : ''}` : 'Источник не указан'));
-            card.append(text, node('span', 'wa-cal-event-action', canLocate ? 'На карте ↗' : row.place || row.placeName ? 'Без точки\nна карте' : ''));
+            main.append(text, node('span', 'wa-cal-event-action', canLocate ? 'На карте ↗' : canBind ? 'Выбрать\nпланету →' : ''));
+            card.append(main);
+            if (canBind && row.placeId) card.append(button('Изменить привязку', event => showPlacePicker(panel, row, controls, bindingSaved, event.currentTarget), 'wa-cal-change'));
             selection.append(card);
         }
         body.append(selection);
@@ -205,6 +224,22 @@ export function showCalendar(view, controls) {
         if (sw) settings.append(node('p', '', 'Legends: 5 дней в неделе, 35 дней в месяце, 368 дней в году. Названия в скобках — подсказки, не перевод в земной календарь. Праздники вне месяцев; местные праздники в конце года — условность опоры этой игры.'));
         settings.append(node('p', '', 'Выбор дня меняет просмотр. Текущее положение игрока и сохранённый маршрут не изменяются.'));
         body.append(settings);
+        panel.querySelector('.wa-cal-notice')?.remove();
+        if (notice) {
+            const toast = node('div', 'wa-cal-notice'); toast.setAttribute('role', 'status');
+            toast.append(node('span', '', notice));
+            if (undoAction) {
+                const undo = button('Отменить', async () => {
+                    if (undoBusy) return; undoBusy = true; undo.disabled = true;
+                    try { await undoAction(); undoAction = null; notice = 'Действие отменено.'; }
+                    catch (error) { notice = error.message; }
+                    finally { undoBusy = false; if (panel.isConnected) render(); }
+                });
+                undo.disabled = undoBusy; toast.append(undo);
+            }
+            panel.append(toast);
+        }
+        body.scrollTop = scrollTop;
         if (focusedLabel) [...body.querySelectorAll('button')].find(item => item.getAttribute('aria-label') === focusedLabel)?.focus({ preventScroll: true });
     }
     panel.refresh = render;

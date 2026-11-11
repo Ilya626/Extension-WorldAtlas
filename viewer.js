@@ -1,4 +1,4 @@
-import { loadAtlas, loadReferenceAtlas, searchAtlasPlaces, activateSourcePlace } from './atlas-data.js';
+import { loadAtlas, loadReferenceAtlas, searchAtlasPlaces, activateSourcePlace, withBoundSourcePlaces } from './atlas-data.js';
 import { createRouteNetwork, historyRed, sourcePathsAt } from './route-network.js';
 import { withGamePlaces } from './game-places.js';
 import { showTravel } from './travel-view.js';
@@ -270,11 +270,12 @@ export class AtlasView {
         } finally { this.importBusy = false; }
     }
     coords(point) { return [this.atlas.height - point.y, point.x]; }
-    setGamePlaces(places = []) {
-        const signature = JSON.stringify(places);
+    setGamePlaces(places = [], sourcePointIds = []) {
+        const signature = JSON.stringify([places, sourcePointIds]);
         if (signature === this.gamePlacesSignature) return;
         this.gamePlacesSignature = signature; this.gamePlaces = places;
-        this.atlas = withGamePlaces(this.baseAtlas, places);
+        this.chatSourcePointIds = sourcePointIds;
+        this.atlas = withGamePlaces(withBoundSourcePlaces(this.baseAtlas, sourcePointIds), places);
         if (!this.root) return;
         const center = this.map.getCenter(), zoom = this.map.getZoom();
         this.renderMap(); this.map.setView(center, zoom, { animate: false });
@@ -393,9 +394,9 @@ export class AtlasView {
         }
     }
     select(place, center = false) {
-        if (place.sourcePlace && !this.baseAtlas.places.some(active => active.id === place.id)) {
+        if (place.sourcePlace && !this.atlas.places.some(active => active.id === place.id)) {
             this.baseAtlas = activateSourcePlace(this.baseAtlas, place.sourcePointId);
-            this.atlas = withGamePlaces(this.baseAtlas, this.gamePlaces);
+            this.atlas = withGamePlaces(withBoundSourcePlaces(this.baseAtlas, this.chatSourcePointIds), this.gamePlaces);
             const position = this.map.getCenter(), zoom = this.map.getZoom();
             this.renderMap(); this.map.setView(position, zoom, { animate: false });
             // This saves map pins only: no history sync, route or calendar mutation.
@@ -591,7 +592,7 @@ export class AtlasView {
     }
     async replaceAtlas(atlas) {
         this.baseAtlas = atlas;
-        this.atlas = withGamePlaces(atlas, this.gamePlaces);
+        this.atlas = withGamePlaces(withBoundSourcePlaces(atlas, this.chatSourcePointIds), this.gamePlaces);
         await this.prepareColors();
         this.title.textContent = atlas.title;
         this.sourceButton.hidden = !atlas.schematic;

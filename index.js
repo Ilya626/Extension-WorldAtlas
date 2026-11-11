@@ -1,9 +1,11 @@
-import { AtlasView } from './viewer.js?v=0.4.9';
+import { AtlasView } from './viewer.js?v=0.4.10';
 import { loadAtlas, loadDefaultAtlas } from './atlas-data.js';
 import { collectHistory, liveEvents, eventRoute, requestRoute, calendarRows, calendarNow, findPlace } from './history-route.js';
 import { showHistoryPanel } from './history-panel.js';
-import { showCalendar } from './calendar-view.js?v=0.4.9';
+import { showCalendar } from './calendar-view.js?v=0.4.10';
 import { readRouteSnapshot, snapshotBinding, snapshotHistory, applyRouteSnapshot, undoRouteChange } from './route-import.js';
+import { searchAtlasPlaces } from './atlas-data.js';
+import { identifyPlaceEvents, applyPlaceBindings, placeCalendarRows, samePlaceEpisode, changePlaceBinding, currentEventPlace } from './place-binding.js';
 
 const OWNER = 'worldAtlas';
 const base = new URL('.', import.meta.url);
@@ -59,12 +61,63 @@ function history() {
     const timing = tracking().timing || {};
     for (const source of result.evidence) if (timing[source.id]?.revision === source.revision) source.timing = timing[source.id];
     const imported = tracking().importedSnapshot;
-    if (imported) return snapshotHistory(imported, context(), result, view.atlas, calendarResolver, tracking().events);
+    if (imported) return { ...snapshotHistory(imported, context(), result, view.atlas, calendarResolver, tracking().events),
+        bindingEvidence: result.evidence, bindingImport: imported };
     return result;
 }
-function events() {
-    const current = history();
-    return current.importEvents || liveEvents(tracking().events, current, view.atlas);
+function events(current = history()) {
+    return applyPlaceBindings(identifyPlaceEvents(current.importEvents || liveEvents(tracking().events, current, view.atlas), current),
+        tracking().placeBindings, view.atlas);
+}
+function linkedCalendarRows() {
+    const current = history(), routeEvents = events(current);
+    const anchor = tracking().importedSnapshot?.calendarStart || tracking().calendarStart || {};
+    const rows = calendarRows(current, routeEvents, anchor).map(row => ({ ...row,
+        placeId: findPlace(row.placeId || row.place, view.atlas)?.id || null }));
+    return placeCalendarRows(rows, routeEvents, current, tracking().placeBindings, view.atlas);
+}
+function refreshChatPlaces() {
+    view.setGamePlaces(tracking().importedSnapshot?.gamePlaces, tracking().boundSourcePointIds);
+}
+async function setPlaceBinding(row, placeId, restorePoints = null) {
+    const ctx = context(), state = tracking();
+    if (!ctx.chatId) throw new Error('Откройте нужный чат.');
+    const rows = linkedCalendarRows().filter(item => item.bindingGuard === row.bindingGuard);
+    const exact = rows.filter(item => item.bindingKey === row.bindingKey);
+    const matches = exact.length ? exact : rows.filter(item => samePlaceEpisode(item.bindingAnchor, row.bindingAnchor));
+    const target = matches.length === 1 ? matches[0] : null;
+    if (!row.bindingKey || !target) throw new Error('Событие изменилось. Откройте выбор ещё раз.');
+    const candidate = placeId && searchAtlasPlaces(view.atlas, '').find(place => place.id === placeId);
+    if (placeId && !candidate) throw new Error('Точка больше не доступна на этой карте.');
+    const previous = structuredClone(state.placeBindings || {}), previousPoints = [...(state.boundSourcePointIds || [])];
+    const previousRoute = structuredClone(route());
+    Object.assign(state, changePlaceBinding(state, { ...row, bindingAnchor: target.bindingAnchor }, placeId,
+        candidate?.sourcePlace ? candidate.sourcePointId : null));
+    delete state.placeBindings[target.bindingKey];
+    if (candidate) state.placeBindings[row.bindingKey] = { placeId, guard: row.bindingGuard, anchor: target.bindingAnchor };
+    if (restorePoints) state.boundSourcePointIds = (state.boundSourcePointIds || []).filter(id => restorePoints.includes(id)
+        || Object.values(state.placeBindings).some(binding => binding.placeId === id));
+    refreshChatPlaces();
+    if (!state.manual) {
+        ctx.chatMetadata[OWNER].routes ??= {};
+        ctx.chatMetadata[OWNER].routes[view.atlas.id] = eventRoute(events());
+    }
+    try { await ctx.saveMetadata(); }
+    catch (error) {
+        state.placeBindings = previous; state.boundSourcePointIds = previousPoints;
+        ctx.chatMetadata[OWNER].routes[view.atlas.id] = previousRoute;
+        if (context().chatMetadata === ctx.chatMetadata) { refreshChatPlaces(); view.drawRoute(); }
+        throw error;
+    }
+    if (context().chatMetadata === ctx.chatMetadata) {
+        view.drawRoute(); view.root.querySelector('.wa-history-panel')?.dispatchEvent(new Event('worldatlas:history-changed'));
+    }
+    return async () => {
+        if (context().chatMetadata !== ctx.chatMetadata) throw new Error('Вернитесь в исходный чат для отмены.');
+        const binding = previous[row.bindingKey];
+        // Restore this one link; other changes made since the click remain intact.
+        return setPlaceBinding(row, binding?.guard === row.bindingGuard ? binding.placeId : null, previousPoints);
+    };
 }
 async function importRoute(file) {
     if (!context().chatId) throw new Error('Откройте чат для импорта маршрута и календаря.');
@@ -77,7 +130,7 @@ async function importRoute(file) {
     const state = tracking(), next = applyRouteSnapshot(state, imported, snapshotBinding(ctx, local, imported.boundary), route());
     for (const key of Object.keys(state)) delete state[key];
     Object.assign(state, next);
-    view.setGamePlaces(imported.gamePlaces);
+    refreshChatPlaces();
     metadata[OWNER].routes ??= {};
     metadata[OWNER].routes[view.atlas.id] = eventRoute(imported.events);
     await ctx.saveMetadata(); view.contextChanged(); openHistory();
@@ -114,29 +167,32 @@ function currentPlaceId() {
     const state = tracking();
     if (state.manual) return route().at(-1);
     if (state.importedSnapshot && history().importBoundaryMissing) return null;
-    const last = events().at(-1);
-    return last?.status === 'departed' || last?.boundaryUncertain ? null : last?.placeId || null;
+    return currentEventPlace(events());
 }
 async function syncHistory() {
-    if (!view || !context().chatId || (settings().auto === false && !tracking().importedSnapshot) || modelBusy || syncing) return;
+    if (!view) return;
+    refreshChatPlaces();
+    if (!context().chatId || (settings().auto === false && !tracking().importedSnapshot) || modelBusy || syncing) return;
     syncing = (async () => {
         await prepareImportedCalendar();
-        view.setGamePlaces(tracking().importedSnapshot?.gamePlaces);
+        refreshChatPlaces();
         const state = tracking(), current = history();
         if (state.importedSnapshot) {
-            const next = eventRoute(current.importEvents);
+            const next = eventRoute(events(current));
             if (!state.manual && JSON.stringify(next) !== JSON.stringify(route())) {
                 context().chatMetadata[OWNER].routes[view.atlas.id] = next; await context().saveMetadata();
             }
             view.drawRoute(); view.root.querySelector('.wa-history-panel')?.dispatchEvent(new Event('worldatlas:history-changed')); view.root.querySelector('.wa-calendar-panel')?.refresh?.(); return;
         }
-        const events = liveEvents(state.events, current, view.atlas);
-        const changed = JSON.stringify(events) !== JSON.stringify(state.events);
+        const nextEvents = liveEvents(state.events, current, view.atlas);
+        const nextRoute = eventRoute(events(current));
+        const changed = JSON.stringify(nextEvents) !== JSON.stringify(state.events)
+            || (!state.manual && JSON.stringify(nextRoute) !== JSON.stringify(route()));
         if (changed) {
-            state.events = events;
+            state.events = nextEvents;
             if (!state.manual) {
                 const root = context().chatMetadata[OWNER]; root.routes ??= {};
-                root.routes[view.atlas.id] = eventRoute(events);
+                root.routes[view.atlas.id] = nextRoute;
             }
             await context().saveMetadata();
         }
@@ -155,7 +211,7 @@ async function updateHistory() {
     if (!current.sources.length || state.modelSignature === current.signature) {
         checkpoint(state); state.manual = false; state.events = liveEvents(state.events, current, view.atlas);
         ctx.chatMetadata[OWNER].routes ??= {};
-        ctx.chatMetadata[OWNER].routes[view.atlas.id] = eventRoute(state.events);
+        ctx.chatMetadata[OWNER].routes[view.atlas.id] = eventRoute(events());
         await ctx.saveMetadata(); view.contextChanged(); return;
     }
     modelBusy = true;
@@ -173,7 +229,7 @@ async function updateHistory() {
         Object.assign(state, result, { manual: false, modelSignature: current.signature });
         state.events = liveEvents(result.events, current, view.atlas);
         ctx.chatMetadata[OWNER].routes ??= {};
-        ctx.chatMetadata[OWNER].routes[view.atlas.id] = eventRoute(state.events);
+        ctx.chatMetadata[OWNER].routes[view.atlas.id] = eventRoute(events());
         await ctx.saveMetadata(); view.contextChanged();
     } finally { modelBusy = false; requestController = null; void syncHistory().catch(error => console.warn('[World Atlas]', error.message)); }
 }
@@ -196,16 +252,16 @@ function openHistory() {
         resume: async () => {
             const state = tracking(); checkpoint(state); state.manual = false;
             delete state.importedSnapshot;
-            view.setGamePlaces([]);
+            refreshChatPlaces();
             state.events = liveEvents(state.events, history(), view.atlas);
-            context().chatMetadata[OWNER].routes[view.atlas.id] = eventRoute(state.events);
+            context().chatMetadata[OWNER].routes[view.atlas.id] = eventRoute(events());
             await context().saveMetadata(); view.contextChanged();
         },
         undo: async () => {
             const state = tracking(), previous = undoRouteChange(state); if (!previous) return;
             for (const key of Object.keys(state)) delete state[key];
             Object.assign(state, previous.state);
-            view.setGamePlaces(state.importedSnapshot?.gamePlaces);
+            refreshChatPlaces();
             context().chatMetadata[OWNER].routes[view.atlas.id] = previous.route;
             await context().saveMetadata(); view.contextChanged();
         },
@@ -231,20 +287,15 @@ function openCalendar() {
     view.importPanel?.remove();
     const anchor = () => tracking().importedSnapshot?.calendarStart || tracking().calendarStart || {};
     showCalendar(view, {
-        rows: () => {
-            const routeEvents = events();
-            return calendarRows(history(), routeEvents, anchor()).map(row => {
-                const event = routeEvents.find(event => event.source === row.source && event.offset === row.offset);
-                const place = findPlace(event?.placeId || row.place, view.atlas);
-                return { ...row, placeId: Number.isFinite(place?.x) && Number.isFinite(place?.y) ? place.id : null };
-            });
-        }, anchor,
+        rows: linkedCalendarRows, anchor,
+        places: query => searchAtlasPlaces(view.atlas, query),
+        activePlaceIds: () => view.atlas.places.map(place => place.id),
+        bind: setPlaceBinding,
         clarify: clarifyCalendar,
         availability: calendarAvailability,
         stop: () => globalThis.WorldMemory?.archive?.stop(),
         onSelect: row => {
-            const event = events().find(event => event.source === row.source && event.offset === row.offset);
-            const place = findPlace(event?.placeId || row.place, view.atlas);
+            const place = view.atlas.places.find(place => place.id === row.placeId) || findPlace(row.place, view.atlas);
             if (!place) { view.message.textContent = `${row.place || 'Место не установлено'} · координат для этой сцены нет`; return; }
             view.root.querySelector('.wa-calendar-panel')?.close?.();
             view.select(place, true);
@@ -326,7 +377,7 @@ jQuery(async () => {
     document.querySelector('#extensionsMenu')?.append(importButton);
     const panel = document.createElement('div');
     panel.className = 'world-atlas-settings';
-    panel.innerHTML = '<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>World Atlas · 0.4.9</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content"><p>30 карточек доступны сразу. Координаты и гиперлинии — «Карта из источника». Для короткого файла маршрута откройте нужный чат и нажмите кнопку ниже: можно выбрать любой файл или вставить JSON текстом. Календарь открывается прямо из строки поиска карты.</p><button type="button" class="menu_button">Открыть атлас</button><button type="button" class="menu_button world-atlas-import">Импорт маршрута и календаря · файл / JSON</button></div></div>';
+    panel.innerHTML = '<div class="inline-drawer"><div class="inline-drawer-toggle inline-drawer-header"><b>World Atlas · 0.4.10</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content"><p>30 карточек доступны сразу. Координаты и гиперлинии — «Карта из источника». Для короткого файла маршрута откройте нужный чат и нажмите кнопку ниже: можно выбрать любой файл или вставить JSON текстом. Календарь открывается прямо из строки поиска карты.</p><button type="button" class="menu_button">Открыть атлас</button><button type="button" class="menu_button world-atlas-import">Импорт маршрута и календаря · файл / JSON</button></div></div>';
     panel.querySelector('button').addEventListener('click', openAtlas);
     panel.querySelector('.world-atlas-import').addEventListener('click', openRouteImport);
     document.querySelector('#extensions_settings')?.append(panel);
@@ -348,6 +399,6 @@ jQuery(async () => {
     }
     globalThis.WorldAtlas = Object.freeze({ open: openAtlas, sync: syncHistory,
         inspect: () => structuredClone(tracking()),
-        inspectCalendar: () => view ? calendarRows(history(), events(), tracking().calendarStart) : [] });
+        inspectCalendar: () => view ? linkedCalendarRows() : [] });
     if (location.hash === '#world-atlas') void openAtlas();
 });

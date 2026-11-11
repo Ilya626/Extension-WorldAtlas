@@ -1,5 +1,5 @@
 @import url('./vendor/leaflet/leaflet.css');
-@import url('./calendar-view.css?v=0.4.9');
+@import url('./calendar-view.css?v=0.4.10');
 @import url('./travel-view.css');
 #extensionsMenu #world_atlas_open,#extensionsMenu #world_atlas_import{background:transparent;color:inherit;border:0;width:100%;text-align:left;font:inherit}
 #extensionsMenu #world_atlas_import span{flex:1;min-width:0;white-space:normal}

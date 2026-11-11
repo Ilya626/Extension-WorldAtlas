@@ -31,6 +31,14 @@ export function activateSourcePlace(atlas, id) {
     return { ...atlas, activeSourcePointIds: [...new Set([...(atlas.activeSourcePointIds || []), id])],
         places: [...atlas.places, sourcePlace(atlas, point)] };
 }
+// Visible per-chat pins created by an event link are not new name aliases for
+// automatic chronology. Keep them searchable without resolving other episodes.
+export function withBoundSourcePlaces(atlas, ids = []) {
+    const existing = new Set(atlas.places.map(place => place.id));
+    const expanded = ids.reduce(activateSourcePlace, atlas);
+    if (expanded === atlas) return atlas;
+    return { ...expanded, places: expanded.places.map(place => existing.has(place.id) ? place : { ...place, bindingOnly: true }) };
+}
 
 // Data references keep the reader independent of any particular fictional world.
 export async function loadAtlas(input, base) {
